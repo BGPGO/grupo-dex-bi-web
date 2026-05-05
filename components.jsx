@@ -186,6 +186,36 @@ const MonthSelect = ({ value, onChange }) => (
   </select>
 );
 
+// ContaSelect — filtra todo o BI por uma das 24 empresas/lojas do Grupo DEX.
+// Usa drilldown.type='conta' pra propagar o filtro pra todas as pages
+// (filterTx já reconhece esse type em data.js).
+const ContaSelect = ({ drilldown, setDrilldown }) => {
+  const contas = (window.BIT && window.BIT.CONTAS) || [];
+  if (!contas.length) return null;
+  const current = (drilldown && drilldown.type === 'conta') ? drilldown.value : '';
+  const onChange = (e) => {
+    const slug = e.target.value;
+    if (!slug) { setDrilldown(null); return; }
+    const c = contas.find(x => x.slug === slug);
+    if (!c) return;
+    setDrilldown({ type: 'conta', value: slug, label: c.label });
+  };
+  return (
+    <select
+      className="header-year header-conta"
+      value={current}
+      onChange={onChange}
+      title="Filtrar por empresa / loja (24 contas Omie consolidadas)"
+      style={{ minWidth: 200, maxWidth: 280 }}
+    >
+      <option value="">Todas as empresas ({contas.length})</option>
+      {contas.map(c => (
+        <option key={c.slug} value={c.slug}>{c.label}</option>
+      ))}
+    </select>
+  );
+};
+
 // BiExportButton: modal com checkboxes pra exportar telas selecionadas como PDF
 const BI_EXPORT_PAGES = [
   { id: "overview", label: "01 Visão Geral" },
@@ -266,7 +296,7 @@ const BiExportButton = () => {
 };
 
 // Header: breadcrumb + YearSelect + MonthSelect + StatusFilter
-const Header = ({ page, onToggleSidebar, statusFilter, setStatusFilter, year, setYear, month, setMonth }) => {
+const Header = ({ page, onToggleSidebar, statusFilter, setStatusFilter, year, setYear, month, setMonth, drilldown, setDrilldown }) => {
   return (
     <header className="header">
       <button className="hd-icon-btn hd-menu-btn" title="Menu" onClick={onToggleSidebar}><Icon name="menu" /></button>
@@ -278,6 +308,7 @@ const Header = ({ page, onToggleSidebar, statusFilter, setStatusFilter, year, se
         <b>{PAGE_TITLES[page] || "Visão Geral"}</b>
       </div>
       <div style={{ flex: 1 }} />
+      {setDrilldown && <ContaSelect drilldown={drilldown} setDrilldown={setDrilldown} />}
       {setYear && <YearSelect value={year} onChange={setYear} available={window.AVAILABLE_YEARS} />}
       {setMonth && <MonthSelect value={month} onChange={setMonth} />}
       {setStatusFilter && <StatusFilterSeg value={statusFilter} onChange={setStatusFilter} />}

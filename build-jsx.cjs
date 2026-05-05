@@ -167,22 +167,26 @@ const PAGE_MODE_INJECT = `\n// Injetado por build-jsx.cjs a partir de bi.config.
       return function () { cancelled = true; };
     }, [printPages]);
 
+    // Reset de drilldown ao mudar period/status — mas PRESERVA filtro de empresa
+    // (drilldown.type === 'conta'), porque é filtro persistente do header.
+    var keepConta = function (d) { return (d && d.type === 'conta') ? d : null; };
+
     useEffect(function () {
       try { localStorage.setItem('bi.statusFilter', statusFilter); } catch (e) {}
       if (typeof window._makeBit === 'function') {
         window.BIT = window._makeBit(statusFilter);
       }
-      setDrilldown(null);
+      setDrilldown(keepConta);
     }, [statusFilter]);
 
     useEffect(function () {
       try { localStorage.setItem('bi.year', String(year)); } catch (e) {}
-      setDrilldown(null);
+      setDrilldown(keepConta);
     }, [year]);
 
     useEffect(function () {
       try { localStorage.setItem('bi.month', String(month)); } catch (e) {}
-      setDrilldown(null);
+      setDrilldown(keepConta);
     }, [month]);
 
     var handleSetPage = function (newPage) {
@@ -266,6 +270,8 @@ const PAGE_MODE_INJECT = `\n// Injetado por build-jsx.cjs a partir de bi.config.
             setYear={setYear}
             month={month}
             setMonth={setMonth}
+            drilldown={drilldown}
+            setDrilldown={setDrilldown}
           />
           <PageComp {...commonProps} />
         </div>

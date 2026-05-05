@@ -33,10 +33,19 @@ module.exports = {
       fluxo: "active",
       tesouraria: "active",
       comparativo: "active",
-      relatorio_ia: "upsell",
-      valuation: "upsell",
+      relatorio: "upsell",       // PRO
+      valuation: "upsell",       // PRO
     },
-    outros: {},
+    outros: {
+      indicators: "upsell",            // PRO
+      faturamento_produto: "upsell",   // PRO
+      curva_abc: "upsell",             // PRO
+      marketing: "upsell",             // PRO
+      hierarquia: "hidden",            // removido do menu
+      detalhado: "hidden",             // removido do menu
+      profunda_cliente: "hidden",      // removido do menu
+      crm: "hidden",                   // removido do menu
+    },
   },
 
   meta: {
