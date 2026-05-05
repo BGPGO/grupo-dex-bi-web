@@ -1,4 +1,4 @@
-/* BGP BI — gerado por build-data.cjs em 2026-05-05T15:57:37.068Z */
+/* BGP BI — gerado por build-data.cjs em 2026-05-05T15:58:38.187Z */
 /* Empresa: Grupo DEX | Ano ref: 2026 */
 const MONTHS = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 const MONTHS_FULL = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
@@ -88,6 +88,16 @@ const COMPOSICAO_DESPESA = [
 ];
 const CONTAS = [
   {
+    "slug": "boali-shopping-praia-da-costa",
+    "label": "BOALI SHOPPING PRAIA DA COSTA",
+    "cliente_grupo": "Dex Invest",
+    "receita": 205709.61999999953,
+    "despesa": 410579.0999999999,
+    "count": 975,
+    "liquido": -204869.4800000004,
+    "margem": -99.59158934813105
+  },
+  {
     "slug": "bolo-de-rolo-aeroporto-vix",
     "label": "BOLO DE ROLO AEROPORTO VIX",
     "cliente_grupo": "Dex Invest",
@@ -96,6 +106,16 @@ const CONTAS = [
     "count": 1000,
     "liquido": 35495.27999999974,
     "margem": 8.81485194605034
+  },
+  {
+    "slug": "bolo-de-rolo-fair-trade-sdu",
+    "label": "BOLO DE ROLO FAIR TRADE SDU",
+    "cliente_grupo": "Dex Invest",
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
   },
   {
     "slug": "casa-bauducco-aeroporto-vix",
@@ -108,26 +128,6 @@ const CONTAS = [
     "margem": -4.123051403969758
   },
   {
-    "slug": "natuzon-aeroporto-vix",
-    "label": "NATUZON AEROPORTO VIX",
-    "cliente_grupo": "Dex Invest",
-    "receita": 334108.0899999995,
-    "despesa": 349225.72000000015,
-    "count": 1390,
-    "liquido": -15117.630000000645,
-    "margem": -4.524772207701007
-  },
-  {
-    "slug": "dominos-gopouva",
-    "label": "DOMINOS GOPOUVA",
-    "cliente_grupo": "Dex Invest",
-    "receita": 246310.7899999999,
-    "despesa": 460671.87000000005,
-    "count": 352,
-    "liquido": -214361.08000000016,
-    "margem": -87.02870061031442
-  },
-  {
     "slug": "dominos-aclimacao",
     "label": "DOMINOS ACLIMAÇÃO",
     "cliente_grupo": "Dex Invest",
@@ -138,24 +138,14 @@ const CONTAS = [
     "margem": -90.81640084665837
   },
   {
-    "slug": "boali-shopping-praia-da-costa",
-    "label": "BOALI SHOPPING PRAIA DA COSTA",
+    "slug": "dominos-aeroporto-guarulhos",
+    "label": "DOMINOS AEROPORTO GUARULHOS",
     "cliente_grupo": "Dex Invest",
-    "receita": 205709.61999999953,
-    "despesa": 410579.0999999999,
-    "count": 975,
-    "liquido": -204869.4800000004,
-    "margem": -99.59158934813105
-  },
-  {
-    "slug": "nobel-zastras-aeroporto-vix",
-    "label": "NOBEL & ZASTRAS AEROPORTO VIX",
-    "cliente_grupo": "Dex Invest",
-    "receita": 165266.83999999988,
-    "despesa": 175555.02999999994,
-    "count": 758,
-    "liquido": -10288.19000000006,
-    "margem": -6.22519919906502
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
   },
   {
     "slug": "dominos-campo-belo",
@@ -168,24 +158,14 @@ const CONTAS = [
     "margem": -48.1499129910739
   },
   {
-    "slug": "optcalia-shopping-vitoria",
-    "label": "OPTCÁLIA SHOPPING VITÓRIA",
+    "slug": "dominos-gopouva",
+    "label": "DOMINOS GOPOUVA",
     "cliente_grupo": "Dex Invest",
-    "receita": 127422.78000000004,
-    "despesa": 421130.27000000037,
-    "count": 589,
-    "liquido": -293707.49000000034,
-    "margem": -230.49841637421525
-  },
-  {
-    "slug": "optcalia-shopping-praia-da-costa",
-    "label": "OPTCÁLIA SHOPPING PRAIA DA COSTA",
-    "cliente_grupo": "Dex Invest",
-    "receita": 115935.13,
-    "despesa": 243391.46000000014,
-    "count": 479,
-    "liquido": -127456.33000000013,
-    "margem": -109.93762632603261
+    "receita": 246310.7899999999,
+    "despesa": 460671.87000000005,
+    "count": 352,
+    "liquido": -214361.08000000016,
+    "margem": -87.02870061031442
   },
   {
     "slug": "dominos-jabaquara",
@@ -198,14 +178,64 @@ const CONTAS = [
     "margem": -88.98064361015967
   },
   {
-    "slug": "optcalia-niteroi",
-    "label": "OPTCÁLIA NITERÓI",
+    "slug": "dominos-jardim-camburi",
+    "label": "DOMINOS JARDIM CAMBURI",
     "cliente_grupo": "Dex Invest",
-    "receita": 109426.60999999996,
-    "despesa": 310089.7700000001,
-    "count": 471,
-    "liquido": -200663.16000000012,
-    "margem": -183.3769318084515
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
+  },
+  {
+    "slug": "dominos-mandaqui",
+    "label": "DOMINOS MANDAQUI",
+    "cliente_grupo": "Dex Invest",
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
+  },
+  {
+    "slug": "dominos-pinheiros",
+    "label": "DOMINOS PINHEIROS",
+    "cliente_grupo": "Dex Invest",
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
+  },
+  {
+    "slug": "dominos-praia-do-canto",
+    "label": "DOMINOS PRAIA DO CANTO",
+    "cliente_grupo": "Dex Invest",
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
+  },
+  {
+    "slug": "dominos-serra",
+    "label": "DOMINOS SERRA",
+    "cliente_grupo": "Dex Invest",
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
+  },
+  {
+    "slug": "dominos-vila-clementino",
+    "label": "DOMINOS VILA CLEMENTINO",
+    "cliente_grupo": "Dex Invest",
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
   },
   {
     "slug": "luigi-alegre",
@@ -216,6 +246,76 @@ const CONTAS = [
     "count": 335,
     "liquido": -15137.519999999946,
     "margem": -39.6603324625318
+  },
+  {
+    "slug": "natuzon-aeroporto-vix",
+    "label": "NATUZON AEROPORTO VIX",
+    "cliente_grupo": "Dex Invest",
+    "receita": 334108.0899999995,
+    "despesa": 349225.72000000015,
+    "count": 1390,
+    "liquido": -15117.630000000645,
+    "margem": -4.524772207701007
+  },
+  {
+    "slug": "nobel-zastras-aeroporto-vix",
+    "label": "NOBEL & ZASTRAS AEROPORTO VIX",
+    "cliente_grupo": "Dex Invest",
+    "receita": 165266.83999999988,
+    "despesa": 175555.02999999994,
+    "count": 758,
+    "liquido": -10288.19000000006,
+    "margem": -6.22519919906502
+  },
+  {
+    "slug": "oculum-shopping-vila-velha",
+    "label": "OCULUM SHOPPING VILA VELHA",
+    "cliente_grupo": "Dex Invest",
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
+  },
+  {
+    "slug": "oculum-shopping-vitoria",
+    "label": "OCULUM SHOPPING VITÓRIA",
+    "cliente_grupo": "Dex Invest",
+    "receita": 0,
+    "despesa": 0,
+    "count": 0,
+    "liquido": 0,
+    "margem": 0
+  },
+  {
+    "slug": "optcalia-niteroi",
+    "label": "OPTCÁLIA NITERÓI",
+    "cliente_grupo": "Dex Invest",
+    "receita": 109426.60999999996,
+    "despesa": 310089.7700000001,
+    "count": 471,
+    "liquido": -200663.16000000012,
+    "margem": -183.3769318084515
+  },
+  {
+    "slug": "optcalia-shopping-praia-da-costa",
+    "label": "OPTCÁLIA SHOPPING PRAIA DA COSTA",
+    "cliente_grupo": "Dex Invest",
+    "receita": 115935.13,
+    "despesa": 243391.46000000014,
+    "count": 479,
+    "liquido": -127456.33000000013,
+    "margem": -109.93762632603261
+  },
+  {
+    "slug": "optcalia-shopping-vitoria",
+    "label": "OPTCÁLIA SHOPPING VITÓRIA",
+    "cliente_grupo": "Dex Invest",
+    "receita": 127422.78000000004,
+    "despesa": 421130.27000000037,
+    "count": 589,
+    "liquido": -293707.49000000034,
+    "margem": -230.49841637421525
   },
   {
     "slug": "spoleto-jabaquara",

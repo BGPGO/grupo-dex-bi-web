@@ -509,12 +509,14 @@ const POSICAO_CAIXA = [
   { name: 'A pagar (futuro)', value: a_pagar_receber.KPIS.TOTAL_DESPESA },
 ];
 
-// CONTAS: metadata por loja/empresa (para o BI exibir comparativo entre as 24).
-// Apenas movimentos REALIZADOS no ano corrente — comparativo de operação real.
+// CONTAS: metadata por loja/empresa — TODAS as 24 contas extraídas (independente
+// de terem movimento realizado no ano). Permite filtrar por qualquer uma no
+// header mesmo se zerada no período corrente. Receita/despesa são do REF_YEAR
+// realizado, pra ordenar por relevância.
 const _contasMap = new Map();
+// Primeiro pass: registra TODAS as contas que vieram da extração (todos os movimentos, mesmo previstos)
 for (const t of [...recNorm, ...despNorm]) {
-  if (!t.conta_slug || !t.realizado) continue;
-  if (!t.data_efetiva || t.data_efetiva.getFullYear() !== REF_YEAR) continue;
+  if (!t.conta_slug) continue;
   if (!_contasMap.has(t.conta_slug)) {
     _contasMap.set(t.conta_slug, {
       slug: t.conta_slug,
@@ -523,15 +525,21 @@ for (const t of [...recNorm, ...despNorm]) {
       receita: 0, despesa: 0, count: 0,
     });
   }
+}
+// Segundo pass: agrega receita/despesa SÓ realizado no REF_YEAR (pra ordenação)
+for (const t of [...recNorm, ...despNorm]) {
+  if (!t.conta_slug || !t.realizado) continue;
+  if (!t.data_efetiva || t.data_efetiva.getFullYear() !== REF_YEAR) continue;
   const o = _contasMap.get(t.conta_slug);
+  if (!o) continue;
   if (t.kind === 'receita') o.receita += t.valor;
   else o.despesa += t.valor;
   o.count += 1;
 }
 const CONTAS = Array.from(_contasMap.values())
   .map(c => ({ ...c, liquido: c.receita - c.despesa, margem: c.receita > 0 ? ((c.receita - c.despesa) / c.receita) * 100 : 0 }))
-  .sort((a, b) => b.receita - a.receita);
-console.log(`  CONTAS metadata: ${CONTAS.length} lojas no ano ${REF_YEAR}`);
+  .sort((a, b) => a.label.localeCompare(b.label));   // ordem alfabetica pro select
+console.log(`  CONTAS metadata: ${CONTAS.length} contas (com ou sem realizado em ${REF_YEAR})`);
 
 const COMPOSICAO_DESPESA = realizado.DESPESA_CATEGORIAS.slice(0, 6).map((c, i) => ({
   name: c.name,
