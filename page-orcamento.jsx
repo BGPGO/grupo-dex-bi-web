@@ -85,10 +85,10 @@ const OvLineChart = ({ data, height = 200, label = "" }) => {
           ))}
         </svg>
       </div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, fontSize: 11, color: "var(--fg-3)", flexWrap: "wrap" }}>
-        <span><span style={{ display: "inline-block", width: 14, height: 2, background: "var(--cyan)", verticalAlign: "middle", marginRight: 4 }} />Realizado</span>
-        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "2px dashed var(--cyan)", verticalAlign: "middle", marginRight: 4, opacity: 0.7 }} />Projeção (orçamento)</span>
-        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "1.5px dashed var(--fg-3)", verticalAlign: "middle", marginRight: 4 }} />Orçado mensal</span>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, fontSize: 12, color: "var(--fg-2)", flexWrap: "wrap", lineHeight: 1.6, padding: "4px 0" }}>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 14, height: 3, background: "var(--cyan)", verticalAlign: "middle", marginRight: 5 }} />Real</span>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "2px dashed var(--cyan)", verticalAlign: "middle", marginRight: 5, opacity: 0.7 }} />Projeção</span>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "1.5px dashed var(--fg-3)", verticalAlign: "middle", marginRight: 5 }} />Orçado/mês</span>
       </div>
     </div>
   );
@@ -166,10 +166,10 @@ const OvBarChart = ({ data, height = 200, label = "" }) => {
           ))}
         </svg>
       </div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, fontSize: 11, color: "var(--fg-3)", flexWrap: "wrap" }}>
-        <span><span style={{ display: "inline-block", width: 14, height: 8, background: "var(--cyan)", verticalAlign: "middle", marginRight: 4, borderRadius: 2 }} />Realizado</span>
-        <span><span style={{ display: "inline-block", width: 14, height: 8, border: "1px dashed var(--cyan)", background: "rgba(34,211,238,0.18)", verticalAlign: "middle", marginRight: 4, borderRadius: 2 }} />Projeção (orçamento)</span>
-        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "2px dashed var(--fg-2)", verticalAlign: "middle", marginRight: 4 }} />Orçado</span>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, fontSize: 12, color: "var(--fg-2)", flexWrap: "wrap", lineHeight: 1.6, padding: "4px 0" }}>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 14, height: 8, background: "var(--cyan)", verticalAlign: "middle", marginRight: 5, borderRadius: 2 }} />Real</span>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 14, height: 8, border: "1px dashed var(--cyan)", background: "rgba(34,211,238,0.18)", verticalAlign: "middle", marginRight: 5, borderRadius: 2 }} />Projeção</span>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "2px dashed var(--fg-2)", verticalAlign: "middle", marginRight: 5 }} />Orçado</span>
       </div>
     </div>
   );
@@ -264,10 +264,10 @@ const OvCumChart = ({ data, height = 220, label = "" }) => {
           ))}
         </svg>
       </div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, fontSize: 11, color: "var(--fg-3)", flexWrap: "wrap" }}>
-        <span><span style={{ display: "inline-block", width: 14, height: 3, background: "var(--cyan)", verticalAlign: "middle", marginRight: 4 }} />Real acumulado</span>
-        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "2px dashed var(--cyan)", verticalAlign: "middle", marginRight: 4, opacity: 0.65 }} />Projeção pra fim do ano</span>
-        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "1.5px dashed var(--fg-3)", verticalAlign: "middle", marginRight: 4 }} />Orçado puro (12× orçado/mês)</span>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, fontSize: 12, color: "var(--fg-2)", flexWrap: "wrap", lineHeight: 1.6, padding: "4px 0" }}>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 14, height: 3, background: "var(--cyan)", verticalAlign: "middle", marginRight: 5 }} />Real acumulado</span>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "2px dashed var(--cyan)", verticalAlign: "middle", marginRight: 5, opacity: 0.65 }} />Projeção fim de ano</span>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "1.5px dashed var(--fg-3)", verticalAlign: "middle", marginRight: 5 }} />Orçado puro</span>
       </div>
     </div>
   );
@@ -395,25 +395,20 @@ const PageOrcamento = ({ statusFilter, drilldown, setDrilldown, year, month }) =
         <KpiTile tone={orcLiq >= 0 ? "cyan" : "red"} label="Líquido orçado (/mês)" value={fmtBRL(orcLiq)} hint={`Anual: R$ ${formatBR(orcLiq*12, 0)}`} />
       </div>
 
-      {/* === Acumulado anual: efeito no fim do ano === */}
-      <div className="card">
-        <h2 className="card-title">Saldo acumulado do ano — efeito no fim de dezembro</h2>
-        <OvCumChart data={cumChart} label={`Real (${monthsRealized}m) + projeção dos ${monthsRemaining}m restantes vs orçamento puro`} />
-        <div className="status-line" style={{ marginTop: 8, display: "flex", gap: 24, flexWrap: "wrap" }}>
-          <span>Projeção de fechamento {REF_YEAR}: <b style={{ color: finalProjLiq >= 0 ? "var(--green)" : "var(--red)" }}>R$ {formatBR(finalProjLiq, 0)}</b></span>
-          <span>Orçamento puro (12 × {fmtBRL(orcLiq)}): <b style={{ color: finalOrcLiq >= 0 ? "var(--green)" : "var(--red)" }}>R$ {formatBR(finalOrcLiq, 0)}</b></span>
-          <span>Diferença: <b style={{ color: (finalProjLiq - finalOrcLiq) >= 0 ? "var(--green)" : "var(--red)" }}>R$ {formatBR(finalProjLiq - finalOrcLiq, 0)}</b></span>
-        </div>
-      </div>
-
-      {/* === Gráficos overlay === */}
-      <div className="row" style={{ gridTemplateColumns: "1fr", gap: 16 }}>
+      {/* === Gráficos 2×2 === */}
+      <div className="row" style={{ gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div className="card">
-          <h2 className="card-title">Líquido mensal — Real até hoje + Projetado até dez</h2>
+          <h2 className="card-title">Saldo acumulado anual — efeito no fim de dezembro</h2>
+          <OvCumChart data={cumChart} label={`Real (${monthsRealized}m) + projeção dos ${monthsRemaining}m restantes`} />
+          <div className="status-line" style={{ marginTop: 6, fontSize: 11, lineHeight: 1.5 }}>
+            <div>Fechamento projetado: <b style={{ color: finalProjLiq >= 0 ? "var(--green)" : "var(--red)" }}>{fmtBRL(finalProjLiq)}</b></div>
+            <div>Orçamento puro: <b style={{ color: finalOrcLiq >= 0 ? "var(--green)" : "var(--red)" }}>{fmtBRL(finalOrcLiq)}</b> · Δ <b style={{ color: (finalProjLiq - finalOrcLiq) >= 0 ? "var(--green)" : "var(--red)" }}>{fmtBRL(finalProjLiq - finalOrcLiq)}</b></div>
+          </div>
+        </div>
+        <div className="card">
+          <h2 className="card-title">Líquido mensal — Real + Projetado</h2>
           <OvLineChart data={liqChart} label={`${contaLabel || "Consolidado"} · ${REF_YEAR}`} />
         </div>
-      </div>
-      <div className="row" style={{ gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div className="card">
           <h2 className="card-title">Receita — Real + Projetado</h2>
           <OvBarChart data={recChart} label="Receita mensal" />

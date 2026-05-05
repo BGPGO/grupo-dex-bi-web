@@ -1,0 +1,36 @@
+{
+  "empresa": "NATUZON AEROPORTO VIX",
+  "periodo": "Janeiro a abril 2026",
+  "generated_at": "2026-05-05T19:03:11.555Z",
+  "tipo": "preliminar",
+  "secoes": {
+    "visao_geral": {
+      "title": "Visão Geral",
+      "analysis": "O período de 4 meses de 2026 da empresa NATUZON AEROPORTO VIX fechou com receita realizada de R$ 334.108 e despesa total (custo + despesa + imposto) de R$ 333.226, resultando em lucro líquido de R$ 882 — margem de +0,3%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (março, R$ 89.249) projeta líquido mensal de R$ 5.942 — anualizando para R$ 71.305. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ 48.419, cenário positivo caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+    },
+    "receita": {
+      "title": "Receita",
+      "analysis": "Receita realizada YTD: R$ 334.108. Categorias detalhadas no extrato.\n\nA carteira a receber está em R$ 0 — ciclo de recebimento curto, característico de operação com forte componente cartão/PIX. O orçamento mensal de receita é R$ 89.249, baseado no mês mais forte do histórico realizado."
+    },
+    "despesa": {
+      "title": "Despesa",
+      "analysis": "O total de saídas foi R$ 333.226, decomposto em: custo variável R$ 120.972 (36% da receita), despesa operacional R$ 175.612 (53% da receita) e impostos R$ 36.642 (11% da receita).\n\n O passivo total a pagar (a vencer + atrasado) é R$ 0 — em linha com o ciclo da operação."
+    },
+    "fluxo_caixa": {
+      "title": "Fluxo de Caixa",
+      "analysis": "O fluxo mensal mostra: janeiro R$ -1.273 · fevereiro R$ -1.756 · março R$ 1.723 · abril R$ 2.188. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 8 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ 48.419."
+    },
+    "tesouraria": {
+      "title": "Tesouraria",
+      "analysis": "Posição de tesouraria: R$ 0 a receber vs R$ 0 a pagar. Razão: —× mais obrigações que recebíveis previstos.\n\nRecomendação: classificar obrigações por urgência de vencimento, identificar credores estratégicos e renegociar prazos onde possível. Para operações com ciclo de caixa apertado, manter linha de crédito pré-aprovada de pelo menos 1.5× a despesa mensal média (~R$ 65.854)."
+    },
+    "comparativo": {
+      "title": "Comparativo",
+      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 83.527 vs orçada R$ 89.249 (-6,4% de variação). Líquido médio realizado R$ 221 vs orçado R$ 5.942.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
+    },
+    "conclusao": {
+      "title": "Conclusão e Recomendações",
+      "analysis": "Resumo do período: operação no positivo, margem de +0,3%, projeção de fechamento R$ 48.419.\n\n3 ações prioritárias:\n\n1. Comparar performance desta empresa com a média do grupo no Painel de Lojas — identificar se está no top ou bottom quartile.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 0: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+    }
+  }
+}

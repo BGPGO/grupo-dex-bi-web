@@ -10,9 +10,10 @@ COPY data.js /usr/share/nginx/html/
 COPY app.bundle.js /usr/share/nginx/html/
 COPY assets /usr/share/nginx/html/assets
 
-# Reports IA pré-gerados — opcional, glob não falha se não existir
-# (gerar via `node generate-report.cjs` quando ANTHROPIC_API_KEY estiver setado)
-# COPY report*.json /usr/share/nginx/html/
+# Reports IA pré-gerados (1 consolidado + 24 por empresa)
+# Gerado por `node gen-reports.cjs` — atualizar antes de cada deploy.
+COPY report.json /usr/share/nginx/html/
+COPY report-conta-*.json /usr/share/nginx/html/
 
 # Config minima — SPA fallback + gzip + cache de assets
 COPY nginx.conf /etc/nginx/conf.d/default.conf

@@ -872,7 +872,7 @@ const PageComparativo = ({ statusFilter, drilldown, setDrilldown, year, month })
 // ===== PageRelatorio =====
 // Carrega report.json (gerado offline por generate-report.cjs) e renderiza
 // um relatorio executivo imprimivel (Ctrl+P -> Save as PDF).
-const PageRelatorio = ({ year, statusFilter }) => {
+const PageRelatorio = ({ year, statusFilter, drilldown, setDrilldown }) => {
   const refYear = window.REF_YEAR || new Date().getFullYear();
   // Hooks de dados — DEVEM ficar antes de qualquer early return pra não violar
   // a ordem dos hooks. Os useMemo dependem de periodYear/periodMonth declarados abaixo
@@ -881,9 +881,8 @@ const PageRelatorio = ({ year, statusFilter }) => {
   const [periodYear, setPeriodYear] = useState(() => {
     try { var p = JSON.parse(localStorage.getItem('bi.report.period') || 'null'); return (p && p.year) || (year || refYear); } catch (e) { return year || refYear; }
   });
-  const [periodMonth, setPeriodMonth] = useState(() => {
-    try { var p = JSON.parse(localStorage.getItem('bi.report.period') || 'null'); return (p && p.month) || 0; } catch (e) { return 0; } // 0 = ano completo
-  });
+  // Travado em ano completo (0) — relatorio é anual sempre
+  const [periodMonth, setPeriodMonth] = useState(0);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -901,10 +900,14 @@ const PageRelatorio = ({ year, statusFilter }) => {
     [periodYear, periodMonth]
   );
 
-  // resolve o nome do arquivo conforme periodo
-  const reportFileName = (y, m) => {
+  // Filtro de empresa: se ativo, carrega report-{slug}.json
+  const contaSlug = (drilldown && drilldown.type === 'conta') ? drilldown.value : null;
+  const contaLabel = contaSlug ? drilldown.label : null;
+  // resolve o nome do arquivo: prioridade conta > mês > ano > default
+  const reportFileName = (y, m, slug) => {
+    if (slug) return `report-conta-${slug}.json`;
     if (m && m > 0) return `report-${y}-${String(m).padStart(2,'0')}.json`;
-    if (y === refYear) return 'report.json'; // default mantem nome principal
+    if (y === refYear) return 'report.json';
     return `report-${y}.json`;
   };
 
@@ -915,7 +918,7 @@ const PageRelatorio = ({ year, statusFilter }) => {
     setError(null);
     setReport(null);
     try { localStorage.setItem('bi.report.period', JSON.stringify({ year: periodYear, month: periodMonth })); } catch (e) {}
-    const file = reportFileName(periodYear, periodMonth);
+    const file = reportFileName(periodYear, periodMonth, contaSlug);
 
     // 1) tenta o JSON pre-gerado (estatico). Se 404, cai no fallback de geracao on-demand.
     fetch(file, { cache: 'no-store' })
@@ -969,7 +972,7 @@ const PageRelatorio = ({ year, statusFilter }) => {
         setGenerating(false);
       });
     return () => { cancelled = true; };
-  }, [periodYear, periodMonth]);
+  }, [periodYear, periodMonth, contaSlug]);
 
   const MONTH_OPTIONS = [
     { v: 0, label: "Ano completo" },
@@ -980,15 +983,20 @@ const PageRelatorio = ({ year, statusFilter }) => {
   ];
   const availableYears = [2026];
 
+  // Filtro travado em "Ano completo" — só seletor de ano (mês fixo 0)
   const PeriodToolbar = (
     <div className="report-period-toolbar" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
       <span style={{ fontSize: 12, color: 'var(--mute)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Período:</span>
       <select className="header-year" value={periodYear} onChange={e => setPeriodYear(Number(e.target.value))}>
         {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
       </select>
-      <select className="header-year" value={periodMonth} onChange={e => setPeriodMonth(Number(e.target.value))}>
-        {MONTH_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-      </select>
+      <span style={{ fontSize: 12, color: 'var(--fg-3)', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 6 }}>Ano completo</span>
+      {contaLabel && (
+        <span style={{ fontSize: 11, color: 'var(--cyan)', background: 'rgba(34,211,238,0.08)', padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(34,211,238,0.3)' }}>
+          {contaLabel}
+          {setDrilldown && <button onClick={() => setDrilldown(null)} style={{ background: 'none', border: 'none', color: 'var(--cyan)', marginLeft: 8, cursor: 'pointer', fontSize: 14 }}>×</button>}
+        </span>
+      )}
     </div>
   );
 
