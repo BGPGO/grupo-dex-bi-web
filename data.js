@@ -1,4 +1,4 @@
-/* BGP BI — gerado por build-data.cjs em 2026-05-05T16:12:42.871Z */
+/* BGP BI — gerado por build-data.cjs em 2026-05-05T18:01:27.645Z */
 /* Empresa: Grupo DEX | Ano ref: 2026 */
 const MONTHS = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 const MONTHS_FULL = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
@@ -328,6 +328,142 @@ const CONTAS = [
     "margem": 0
   }
 ];
+const MONTH_DRE = [
+  {
+    "m": "janeiro",
+    "receita": 1208461.140000002,
+    "custo": 773310.88,
+    "despesa": 661804.9100000004,
+    "imposto": 78182.37000000001,
+    "outros": 167002.61,
+    "liquido": -304837.0199999984,
+    "count": 2689
+  },
+  {
+    "m": "fevereiro",
+    "receita": 855217.4300000072,
+    "custo": 512469.18000000005,
+    "despesa": 577720.42,
+    "imposto": 66406.46,
+    "outros": 135553.55000000002,
+    "liquido": -301378.62999999296,
+    "count": 3698
+  },
+  {
+    "m": "março",
+    "receita": 381838.57000000105,
+    "custo": 261270.9800000001,
+    "despesa": 323618.5499999999,
+    "imposto": 50223.350000000006,
+    "outros": 99935.84999999999,
+    "liquido": -253274.30999999892,
+    "count": 1574
+  },
+  {
+    "m": "abril",
+    "receita": 178113.97,
+    "custo": 170912.69000000012,
+    "despesa": 172498.62000000005,
+    "imposto": 13356.779999999999,
+    "outros": 5070,
+    "liquido": -178654.12000000017,
+    "count": 682
+  },
+  {
+    "m": "maio",
+    "receita": 0,
+    "custo": 0,
+    "despesa": 0,
+    "imposto": 0,
+    "outros": 0,
+    "liquido": 0,
+    "count": 0
+  },
+  {
+    "m": "junho",
+    "receita": 0,
+    "custo": 0,
+    "despesa": 0,
+    "imposto": 0,
+    "outros": 0,
+    "liquido": 0,
+    "count": 0
+  },
+  {
+    "m": "julho",
+    "receita": 0,
+    "custo": 0,
+    "despesa": 0,
+    "imposto": 0,
+    "outros": 0,
+    "liquido": 0,
+    "count": 0
+  },
+  {
+    "m": "agosto",
+    "receita": 0,
+    "custo": 0,
+    "despesa": 0,
+    "imposto": 0,
+    "outros": 0,
+    "liquido": 0,
+    "count": 0
+  },
+  {
+    "m": "setembro",
+    "receita": 0,
+    "custo": 0,
+    "despesa": 0,
+    "imposto": 0,
+    "outros": 0,
+    "liquido": 0,
+    "count": 0
+  },
+  {
+    "m": "outubro",
+    "receita": 0,
+    "custo": 0,
+    "despesa": 0,
+    "imposto": 0,
+    "outros": 0,
+    "liquido": 0,
+    "count": 0
+  },
+  {
+    "m": "novembro",
+    "receita": 0,
+    "custo": 0,
+    "despesa": 0,
+    "imposto": 0,
+    "outros": 0,
+    "liquido": 0,
+    "count": 0
+  },
+  {
+    "m": "dezembro",
+    "receita": 0,
+    "custo": 0,
+    "despesa": 0,
+    "imposto": 0,
+    "outros": 0,
+    "liquido": 0,
+    "count": 0
+  }
+];
+const ORCAMENTO = {
+  "receita_mes": 1208461.140000002,
+  "custo_mes": 429490.93250000005,
+  "despesa_mes": 433910.6250000001,
+  "imposto_mes": 52042.240000000005,
+  "meses_ativos": 4,
+  "melhor_mes_idx": 0,
+  "liquido_mes": 293017.3425000018,
+  "receita_ano": 14501533.680000024,
+  "custo_ano": 5153891.19,
+  "despesa_ano": 5206927.500000002,
+  "imposto_ano": 624506.8800000001,
+  "liquido_ano": 3516208.1100000213
+};
 
 const SEGMENTS = {
   "realizado": {
@@ -17428,7 +17564,7 @@ function _makeBit(filter) {
     IMPOSTOS_PCT: 0,
   };
   return Object.assign({
-    META, POSICAO_CAIXA, COMPOSICAO_DESPESA, CONTAS,
+    META, POSICAO_CAIXA, COMPOSICAO_DESPESA, CONTAS, MONTH_DRE, ORCAMENTO,
     MONTHS, MONTHS_FULL, fmt, fmtK, fmtPct,
     SEGMENTS,
     MONTH_DATA: seg.MONTH_DATA,

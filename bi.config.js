@@ -33,6 +33,7 @@ module.exports = {
       fluxo: "active",
       tesouraria: "active",
       comparativo: "active",
+      orcamento: "active",       // tela de orçamento (melhor mês receita + média custo/despesa)
       relatorio: "active",       // liberado pro Grupo DEX
       valuation: "active",       // liberado pro Grupo DEX
     },

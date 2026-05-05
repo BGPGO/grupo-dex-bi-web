@@ -23,6 +23,7 @@ const SOURCES = [
   'pages-2.jsx',
   'pages-3.jsx',
   'pages-4.jsx',
+  'page-orcamento.jsx',
   'upsell-pages.jsx',
 ];
 
@@ -68,7 +69,8 @@ const PAGE_MODE_INJECT = `\n// Injetado por build-jsx.cjs a partir de bi.config.
     fluxo: '05 Fluxo de caixa',
     tesouraria: '06 Tesouraria',
     comparativo: '07 Comparativo',
-    relatorio: '08 Relatório IA',
+    orcamento: '08 Orçamento',
+    relatorio: '09 Relatório IA',
     faturamento_produto: '09 Faturamento por Produto',
     curva_abc: '10 Curva ABC',
     marketing: '11 Marketing ADS',
@@ -203,6 +205,7 @@ const PAGE_MODE_INJECT = `\n// Injetado por build-jsx.cjs a partir de bi.config.
       fluxo: PageFluxo,
       tesouraria: PageTesouraria,
       comparativo: PageComparativo,
+      orcamento: PageOrcamento,
       relatorio: PageRelatorio,
       faturamento_produto: PageFaturamentoProduto,
       curva_abc: PageCurvaABC,

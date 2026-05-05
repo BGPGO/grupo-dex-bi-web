@@ -747,12 +747,17 @@ const PageMarketing = ({ drilldown, setDrilldown }) => {
 // Persistencia local em localStorage.bi.valuation
 // ============================================================
 const VALUATION_LS_KEY = "bi.valuation";
+// Premissas alinhadas com fin40 (ValuationTab):
+//   crescimento receita: ano2/ano3 = 10%
+//   IPCA (inflaciona despesas): 4.5%
+//   WACC (taxa de desconto): 25%
+//   perpetuidade: 3%
 const VALUATION_DEFAULTS = {
-  growth_year2: 20,
-  growth_year3: 20,
+  growth_year2: 10,
+  growth_year3: 10,
   ipca: 4.5,
   wacc: 25,
-  perpetuity_growth: 10,
+  perpetuity_growth: 3,
   use_simulated_margin: false,
   simulated_margin: 15,
 };
@@ -825,75 +830,95 @@ const PageValuation = () => {
     saveValuationPremissas({ ...VALUATION_DEFAULTS });
   };
 
-  // ----- Inputs derivados de window.BIT -----
-  // MONTH_DATA tem 12 meses do ano REF_YEAR ja. Receita YTD = soma dos meses
-  // que tem receita > 0 (i.e., os meses com dados realizados/orcados).
-  const MD = Array.isArray(B.MONTH_DATA) ? B.MONTH_DATA : [];
-  const monthsWithData = MD.filter(m => (m.receita || 0) > 0 || (m.despesa || 0) > 0);
-  const monthCount = Math.max(1, monthsWithData.length);
-  const totalRecYTD = MD.reduce((s, m) => s + (m.receita || 0), 0);
-  const totalDespYTD = MD.reduce((s, m) => s + (m.despesa || 0), 0);
+  // ----- Inputs derivados de window.BIT (DRE estrutural igual fin40) -----
+  // MONTH_DRE: 12 meses com receita/custo/despesa/imposto/liquido segregados.
+  const DRE = Array.isArray(B.MONTH_DRE) ? B.MONTH_DRE : [];
+  const ORC = B.ORCAMENTO || {};
+  const monthsRealized = DRE.filter(m => m.count > 0).length;
+  const monthsRemaining = Math.max(0, 12 - monthsRealized);
+  const totalRecYTD = DRE.reduce((s, m) => s + (m.receita || 0), 0);
+  const totalCustoYTD = DRE.reduce((s, m) => s + (m.custo || 0), 0);
+  const totalDespesaYTD = DRE.reduce((s, m) => s + (m.despesa || 0), 0);
+  const totalImpostoYTD = DRE.reduce((s, m) => s + (m.imposto || 0), 0);
+  // Aliases pra compatibilidade com o resto da UI (que usa totalDespYTD/resultadoYTD)
+  const totalDespYTD = totalCustoYTD + totalDespesaYTD + totalImpostoYTD;
   const resultadoYTD = totalRecYTD - totalDespYTD;
-  const margemEfetiva = totalRecYTD > 0 ? (resultadoYTD / totalRecYTD) * 100 : 0;
 
-  // ----- DCF (5 anos) -----
-  // Ano 1: receita anualizada (YTD * 12 / monthCount). Se ja temos 12 meses,
-  // anualizar = identidade. Para 4 meses, ano1 = ytd * 3.
+  // ----- DCF (3 anos, alinhado com fin40 ValuationTab) -----
+  // Ano 1 = Realizado YTD + Orçamento (meses restantes).
+  // Ano 2/3 = receita * (1+growth); custo/imposto mantém % receita; despesa * IPCA.
+  // FCF = receita - custo - imposto - despesa.
+  // Terminal = FCF3 * (1+g) / (wacc - g), VP = TV/(1+wacc)^3.
   const dcf = useMemo(() => {
-    const { growth_year2, growth_year3, ipca, wacc, perpetuity_growth,
-            use_simulated_margin, simulated_margin } = premissas;
+    const { growth_year2, growth_year3, ipca, wacc, perpetuity_growth } = premissas;
 
-    const ano1Receita = monthCount >= 12
-      ? totalRecYTD
-      : (totalRecYTD * 12) / monthCount;
+    // ANO 1 (composto): YTD realizado + projeção dos meses restantes via ORCAMENTO
+    const ano1Receita = totalRecYTD + (ORC.receita_mes || 0) * monthsRemaining;
+    const ano1Custo   = totalCustoYTD   + (ORC.custo_mes   || 0) * monthsRemaining;
+    const ano1Imposto = totalImpostoYTD + (ORC.imposto_mes || 0) * monthsRemaining;
+    const ano1Despesa = totalDespesaYTD + (ORC.despesa_mes || 0) * monthsRemaining;
+    const ano1FCF = ano1Receita - ano1Custo - ano1Imposto - ano1Despesa;
 
-    // Margem usada pra gerar EBITDA/FCF
-    const margemPct = use_simulated_margin
-      ? (simulated_margin || 0)
-      : margemEfetiva;
-    const margemDecimal = margemPct / 100;
+    // Pcts pra projeção (custo/imposto mantêm % receita)
+    const pctCusto   = ano1Receita > 0 ? ano1Custo   / ano1Receita : 0;
+    const pctImposto = ano1Receita > 0 ? ano1Imposto / ano1Receita : 0;
 
-    // Projecao de receita 5 anos:
-    // Ano 1: anualizada (YTD * 12 / mes)
-    // Ano 2: ano1 * (1 + growth_year2)
-    // Ano 3: ano2 * (1 + growth_year3)
-    // Ano 4-5: cresce por IPCA
-    const receitas = [
-      ano1Receita,
-      ano1Receita * (1 + (growth_year2 || 0) / 100),
-      ano1Receita * (1 + (growth_year2 || 0) / 100) * (1 + (growth_year3 || 0) / 100),
-    ];
-    receitas.push(receitas[2] * (1 + (ipca || 0) / 100));
-    receitas.push(receitas[3] * (1 + (ipca || 0) / 100));
+    const ipcaD = (ipca || 0) / 100;
+    const projYear = (yearOffset, growthRate) => {
+      const newReceita = ano1Receita * Math.pow(1 + (growthRate || 0) / 100, 1) * (yearOffset === 2 ? (1 + (growth_year3 || 0) / 100) / (1 + (growth_year2 || 0) / 100) : 1);
+      // simplifica: receita ano2 = ano1 * (1+g2); ano3 = ano2 * (1+g3)
+      return null;
+    };
+    const ano2Receita = ano1Receita * (1 + (growth_year2 || 0) / 100);
+    const ano3Receita = ano2Receita * (1 + (growth_year3 || 0) / 100);
+    const ano2Custo   = pctCusto   * ano2Receita;
+    const ano3Custo   = pctCusto   * ano3Receita;
+    const ano2Imposto = pctImposto * ano2Receita;
+    const ano3Imposto = pctImposto * ano3Receita;
+    const ano2Despesa = ano1Despesa * (1 + ipcaD);
+    const ano3Despesa = ano1Despesa * Math.pow(1 + ipcaD, 2);
+    const ano2FCF = ano2Receita - ano2Custo - ano2Imposto - ano2Despesa;
+    const ano3FCF = ano3Receita - ano3Custo - ano3Imposto - ano3Despesa;
 
-    // FCF = receita * margem (aproxima EBITDA, simplificacao do DCF clássico)
-    const fcfs = receitas.map(r => r * margemDecimal);
-    const ebitdas = fcfs; // mesmo valor (sem D&A separado)
+    const receitas = [ano1Receita, ano2Receita, ano3Receita];
+    const custos   = [ano1Custo,   ano2Custo,   ano3Custo];
+    const impostos = [ano1Imposto, ano2Imposto, ano3Imposto];
+    const despesas = [ano1Despesa, ano2Despesa, ano3Despesa];
+    const fcfs     = [ano1FCF,     ano2FCF,     ano3FCF];
 
-    // VP de cada FCF = FCF / (1 + wacc)^i, i=1..5
+    // Margem efetiva derivada (FCF/receita) — só pra display
+    const margemPct = ano1Receita > 0 ? (ano1FCF / ano1Receita) * 100 : 0;
+
+    // VP via WACC
     const waccDecimal = (wacc || 0) / 100;
-    const factors = [1, 2, 3, 4, 5].map(i => Math.pow(1 + waccDecimal, i));
+    const factors = [1, 2, 3].map(i => Math.pow(1 + waccDecimal, i));
     const vps = fcfs.map((f, i) => f / factors[i]);
     const pvFCF = vps.reduce((s, v) => s + v, 0);
 
-    // Valor terminal Gordon: FCF[5] * (1 + g) / (wacc - g), descontado por (1+wacc)^5
+    // Terminal Gordon sobre FCF3
     const gDecimal = (perpetuity_growth || 0) / 100;
     let terminalValue = 0;
     let pvTerminal = 0;
     if (waccDecimal > gDecimal) {
-      terminalValue = (fcfs[4] * (1 + gDecimal)) / (waccDecimal - gDecimal);
-      pvTerminal = terminalValue / factors[4];
+      terminalValue = (fcfs[2] * (1 + gDecimal)) / (waccDecimal - gDecimal);
+      pvTerminal = terminalValue / factors[2];
     }
-
     const totalValuation = pvFCF + pvTerminal;
 
     return {
-      ano1Receita, margemPct, margemDecimal,
-      receitas, ebitdas, fcfs, factors, vps,
+      ano1Receita, margemPct,
+      receitas, custos, impostos, despesas, fcfs,
+      ebitdas: fcfs,                             // alias pra compatibilidade UI
+      factors, vps,
       pvFCF, terminalValue, pvTerminal, totalValuation,
       waccValid: waccDecimal > gDecimal,
+      monthsRealized, monthsRemaining,
+      pctCusto, pctImposto,
     };
-  }, [premissas, totalRecYTD, monthCount, margemEfetiva]);
+  }, [premissas, totalRecYTD, totalCustoYTD, totalDespesaYTD, totalImpostoYTD, monthsRealized, monthsRemaining, ORC.receita_mes, ORC.custo_mes, ORC.despesa_mes, ORC.imposto_mes]);
+  // Compat: monthCount usado em vários lugares da UI
+  const monthCount = monthsRealized || 1;
+  const margemEfetiva = dcf.margemPct;
 
   // ----- Helpers de formatacao -----
   const fmtMoney = (n) => "R$ " + formatBR(n || 0, 0);
@@ -954,15 +979,15 @@ const PageValuation = () => {
 
       {/* ============ Inputs derivados (window.BIT) ============ */}
       <div className="kpi-row">
-        <MiniKpi tone="green" label={`Receita YTD (${REF_YEAR})`} value={formatBR(totalRecYTD, 0)} hint={`${monthCount} ${monthCount === 1 ? "mes" : "meses"} · anualiza p/ ${formatBR(dcf.ano1Receita, 0)}`} />
+        <MiniKpi tone="green" label={`Receita YTD (${REF_YEAR})`} value={formatBR(totalRecYTD, 0)} hint={`${monthsRealized} real + ${monthsRemaining} orçado · Ano 1 = ${formatBR(dcf.ano1Receita, 0)}`} />
         <MiniKpi tone="red"   label={`Despesa YTD (${REF_YEAR})`} value={formatBR(totalDespYTD, 0)} hint={`${monthCount} ${monthCount === 1 ? "mes" : "meses"}`} />
         <MiniKpi tone="cyan"  label="Resultado YTD" value={formatBR(resultadoYTD, 0)} hint={`Margem efetiva ${margemEfetiva.toFixed(1).replace(".", ",")}%`} />
         <MiniKpi tone="amber" label="Margem aplicada no DCF" value={dcf.margemPct.toFixed(1).replace(".", ",") + "%"} nonMonetary hint={premissas.use_simulated_margin ? "simulada (toggle on)" : "efetiva (YTD)"} />
       </div>
 
-      {/* ============ Tabela de projecao 5 anos ============ */}
+      {/* ============ Tabela de projecao 3 anos (alinhado fin40) ============ */}
       <div className="card" style={{ minWidth: 0 }}>
-        <h2 className="card-title">Projecao 5 anos — Receita, EBITDA, FCF, Valor Presente</h2>
+        <h2 className="card-title">Projeção 3 anos — Receita, FCF, Valor Presente (alinhado fin40)</h2>
         <div className="t-scroll" style={{ overflowX: "auto" }}>
           <table className="t">
             <thead>
@@ -996,11 +1021,11 @@ const PageValuation = () => {
                 );
               })}
               <tr style={{ background: "rgba(34, 211, 238, 0.06)", fontWeight: 700 }}>
-                <td colSpan="5" style={{ textAlign: "right" }}>VP dos Fluxos (5 anos)</td>
+                <td colSpan="5" style={{ textAlign: "right" }}>VP dos Fluxos (3 anos)</td>
                 <td className="num green">R$ {formatBR(dcf.pvFCF, 0)}</td>
               </tr>
               <tr>
-                <td colSpan="5" style={{ textAlign: "right" }}>Valor Terminal (Gordon, FCF<sub>5</sub>·(1+g)/(WACC−g))</td>
+                <td colSpan="5" style={{ textAlign: "right" }}>Valor Terminal (Gordon, FCF<sub>3</sub>·(1+g)/(WACC−g))</td>
                 <td className="num">R$ {formatBR(dcf.terminalValue, 0)}</td>
               </tr>
               <tr style={{ background: "rgba(34, 211, 238, 0.06)", fontWeight: 700 }}>

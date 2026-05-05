@@ -132,6 +132,40 @@ function getCategoriaNome(codigo) {
   return c.descricao || c.descricao_categoria || `Cat ${codigo}`;
 }
 
+// Classificador inteligente de categoria → seção DRE { custo | despesa | imposto | outros }
+// Customizado para o varejo do Grupo DEX (food + óptica). Heurística sobre nome
+// da categoria. User pode overrider via bi.config.js > meta.categoria_overrides.
+function classificarSecao(desc, overrides) {
+  if (!desc) return 'outros';
+  const k = String(desc).trim();
+  if (overrides && overrides[k]) return overrides[k];
+  const s = k.toLowerCase();
+
+  // Outros — fora do FCF operacional (não entram no DRE de operação)
+  if (/^<.*>|dispon[ií]vel/.test(s)) return 'outros';
+  if (/transfer[eê]ncia/.test(s)) return 'outros';
+  if (/empr[eé]stim|aplica[cç][aã]o\s+financ|distribui[cç][aã]o\s+de\s+(lucr|result)|aporte|integraliza|novas\s+opera[cç][oõ]es/.test(s)) return 'outros';
+  if (/^juros\b|encargos\s+financ|multa.*atras/.test(s)) return 'outros';
+
+  // Impostos sobre vendas / federais (NÃO inclui IPTU, INSS, FGTS — esses são despesa operacional)
+  if (/\b(icms|iss|cofins|pis|tribut|iof|irpj|csll)\b/.test(s)) return 'imposto';
+  if (/simples\s+nacional|\bdas\b/.test(s)) return 'imposto';
+
+  // Custo direto — variável com vendas / CMV / produção
+  if (/^compras\b|mercadoria|mat[eé]ria.prima|insumo|cmv|food\s*cost/.test(s)) return 'custo';
+  if (/royalt/.test(s)) return 'custo';
+  if (/repass/.test(s)) return 'custo';
+  if (/^frete\b|servi[cç]os?\s+de\s+entrega/.test(s)) return 'custo';
+  if (/^comiss/.test(s)) return 'custo';
+  if (/devolu[cç][aã]o/.test(s)) return 'custo';
+  if (/aluguel.*vari[aá]vel/.test(s)) return 'custo';
+  if (/fundo\s+de\s+promo/.test(s)) return 'custo';   // royalty marketing food
+  if (/^cdu\b/.test(s)) return 'custo';                // taxa CDU food (judgment)
+
+  // Default: despesa operacional
+  return 'despesa';
+}
+
 function getCategoriaNatureza(codigo) {
   // Omie: natureza pode ser "R" (receita) | "D" (despesa) | "T" (transferencia)
   const c = catById.get(String(codigo));
@@ -245,8 +279,12 @@ function normalizeMovimento(m) {
     conta: m._conta || '',                  // ← multi-conta: nome da loja/empresa
     conta_slug: m._conta_slug || '',
     cliente_grupo: m._cliente_grupo || '',
+    secao: natureza === 'R' ? 'receita' : classificarSecao(categoria, _categoriaOverrides),
   };
 }
+
+// Carrega overrides do bi.config.js > meta.categoria_overrides
+const _categoriaOverrides = (_cfg?.meta?.categoria_overrides) || {};
 
 console.log('\n=== Normalizando lancamentos ===');
 let recNorm, despNorm, dataSource;
@@ -279,6 +317,74 @@ for (const t of [...recNorm, ...despNorm]) {
 const REF_YEAR = new Date().getFullYear();
 const AVAILABLE_YEARS = Object.keys(yearCount).map(Number).sort((a, b) => b - a);
 console.log(`  ano de referencia: ${REF_YEAR} | anos disponiveis: ${AVAILABLE_YEARS.join(', ')}`);
+
+// ============================================================
+// DRE mensal (REF_YEAR) + ORCAMENTO
+// ============================================================
+// MONTH_DRE[0..11] = { m, receita, custo, despesa, imposto, outros, liquido, count }
+// Considera APENAS movimentos REALIZADOS no REF_YEAR (caixa real, comparável com fin40).
+const MONTH_DRE = MONTHS_FULL.map(m => ({ m, receita: 0, custo: 0, despesa: 0, imposto: 0, outros: 0, liquido: 0, count: 0 }));
+const monthsTouched = new Set();
+for (const t of [...recNorm, ...despNorm]) {
+  if (!t.realizado || !t.data_efetiva) continue;
+  if (t.data_efetiva.getFullYear() !== REF_YEAR) continue;
+  const mIdx = t.data_efetiva.getMonth();
+  monthsTouched.add(mIdx);
+  const md = MONTH_DRE[mIdx];
+  if (t.kind === 'receita') md.receita += t.valor;
+  else {
+    const sec = t.secao || 'despesa';
+    if (sec === 'custo') md.custo += t.valor;
+    else if (sec === 'imposto') md.imposto += t.valor;
+    else if (sec === 'outros') md.outros += t.valor;
+    else md.despesa += t.valor;
+  }
+  md.count += 1;
+}
+for (const md of MONTH_DRE) md.liquido = md.receita - md.custo - md.imposto - md.despesa;
+
+// Mostra log da classificação (audit pro user)
+const _classCounts = { custo: 0, despesa: 0, imposto: 0, outros: 0 };
+const _classValor = { custo: 0, despesa: 0, imposto: 0, outros: 0 };
+for (const t of despNorm) {
+  if (!t.realizado || !t.data_efetiva || t.data_efetiva.getFullYear() !== REF_YEAR) continue;
+  const sec = t.secao || 'despesa';
+  _classCounts[sec] = (_classCounts[sec] || 0) + 1;
+  _classValor[sec] = (_classValor[sec] || 0) + t.valor;
+}
+console.log(`  classificacao DRE (${REF_YEAR} realizado):`);
+console.log(`    custo:    R$ ${_classValor.custo.toFixed(2).padStart(15)} (${_classCounts.custo} mov)`);
+console.log(`    despesa:  R$ ${_classValor.despesa.toFixed(2).padStart(15)} (${_classCounts.despesa} mov)`);
+console.log(`    imposto:  R$ ${_classValor.imposto.toFixed(2).padStart(15)} (${_classCounts.imposto} mov)`);
+console.log(`    outros:   R$ ${_classValor.outros.toFixed(2).padStart(15)} (${_classCounts.outros} mov, fora FCF)`);
+
+// ORCAMENTO conforme regra do user:
+//   receita_mes_orcado = MELHOR mês de receita do histórico do REF_YEAR
+//   custo_mes_orcado   = MEDIA dos meses com movimento (não conta meses zerados)
+//   despesa_mes_orcado = MEDIA dos meses com movimento
+//   imposto_mes_orcado = MEDIA dos meses com movimento
+const _activeMonths = MONTH_DRE.filter(m => m.count > 0);
+const _N = Math.max(1, _activeMonths.length);
+const ORCAMENTO = {
+  receita_mes: Math.max(...MONTH_DRE.map(m => m.receita), 0),    // melhor mês
+  custo_mes:   _activeMonths.reduce((s, m) => s + m.custo, 0)   / _N,  // média
+  despesa_mes: _activeMonths.reduce((s, m) => s + m.despesa, 0) / _N,
+  imposto_mes: _activeMonths.reduce((s, m) => s + m.imposto, 0) / _N,
+  meses_ativos: _activeMonths.length,
+  melhor_mes_idx: MONTH_DRE.reduce((bi, m, i, a) => m.receita > a[bi].receita ? i : bi, 0),
+};
+ORCAMENTO.liquido_mes = ORCAMENTO.receita_mes - ORCAMENTO.custo_mes - ORCAMENTO.imposto_mes - ORCAMENTO.despesa_mes;
+ORCAMENTO.receita_ano = ORCAMENTO.receita_mes * 12;
+ORCAMENTO.custo_ano   = ORCAMENTO.custo_mes   * 12;
+ORCAMENTO.despesa_ano = ORCAMENTO.despesa_mes * 12;
+ORCAMENTO.imposto_ano = ORCAMENTO.imposto_mes * 12;
+ORCAMENTO.liquido_ano = ORCAMENTO.liquido_mes * 12;
+console.log(`  ORCAMENTO mensal (regra: receita=melhor mes, demais=media):`);
+console.log(`    Receita orcada: R$ ${ORCAMENTO.receita_mes.toFixed(2)} (mes ${MONTHS[ORCAMENTO.melhor_mes_idx]})`);
+console.log(`    Custo medio:    R$ ${ORCAMENTO.custo_mes.toFixed(2)}`);
+console.log(`    Despesa media:  R$ ${ORCAMENTO.despesa_mes.toFixed(2)}`);
+console.log(`    Imposto medio:  R$ ${ORCAMENTO.imposto_mes.toFixed(2)}`);
+console.log(`    Liquido orcado: R$ ${ORCAMENTO.liquido_mes.toFixed(2)} (anual R$ ${ORCAMENTO.liquido_ano.toFixed(2)})`);
 
 // ---------- segmentos por filtro ----------
 function selectByFilter(items, filter) {
@@ -577,6 +683,8 @@ const META = ${JSON.stringify(meta, null, 2)};
 const POSICAO_CAIXA = ${JSON.stringify(POSICAO_CAIXA, null, 2)};
 const COMPOSICAO_DESPESA = ${JSON.stringify(COMPOSICAO_DESPESA, null, 2)};
 const CONTAS = ${JSON.stringify(CONTAS, null, 2)};
+const MONTH_DRE = ${JSON.stringify(MONTH_DRE, null, 2)};
+const ORCAMENTO = ${JSON.stringify(ORCAMENTO, null, 2)};
 
 const SEGMENTS = ${JSON.stringify({ realizado, a_pagar_receber, tudo }, null, 2)};
 
@@ -722,7 +830,7 @@ function _makeBit(filter) {
     IMPOSTOS_PCT: 0,
   };
   return Object.assign({
-    META, POSICAO_CAIXA, COMPOSICAO_DESPESA, CONTAS,
+    META, POSICAO_CAIXA, COMPOSICAO_DESPESA, CONTAS, MONTH_DRE, ORCAMENTO,
     MONTHS, MONTHS_FULL, fmt, fmtK, fmtPct,
     SEGMENTS,
     MONTH_DATA: seg.MONTH_DATA,
