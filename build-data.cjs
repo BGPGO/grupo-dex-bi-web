@@ -89,10 +89,13 @@ const movimentos = readJson('movimentos', []);
 const contasCorrentes = readJson('contas_correntes', []);
 const summary = readJson('_summary', null);
 
-// Bancos aceitos: 033 Santander, 748 Sicredi, 756 Sicoob.
-// Movimentos em outras contas (CAIXA interno, adiantamentos de viagem etc)
-// nao entram no BI - sao operacionais, nao representam fluxo de caixa real.
-const BANCOS_OK = new Set(['033', '748', '756']);
+// Bancos aceitos — configurável via bi.config.js > fontes.omie.bancos_ok
+// (ou fontes.omie_multi.bancos_ok). Lista vazia = aceita todos.
+let _cfg;
+try { _cfg = require('./bi.config.js'); } catch (e) { _cfg = null; }
+const _bancosCfg = (_cfg?.fontes?.omie?.bancos_ok) ?? (_cfg?.fontes?.omie_multi?.bancos_ok) ?? ['033', '748', '756'];
+const BANCOS_OK = new Set(_bancosCfg.map(String));
+console.log(`  bancos_ok: ${BANCOS_OK.size === 0 ? '(aceita todos)' : [..._bancosCfg].join(', ')}`);
 const ccOk = new Set();
 for (const c of contasCorrentes) {
   if (BANCOS_OK.has(String(c.codigo_banco))) ccOk.add(String(c.nCodCC));
@@ -239,6 +242,9 @@ function normalizeMovimento(m) {
     grupo,
     nf: d.cNumDocFiscal || '',
     parcela: d.cNumParcela || '',
+    conta: m._conta || '',                  // ← multi-conta: nome da loja/empresa
+    conta_slug: m._conta_slug || '',
+    cliente_grupo: m._cliente_grupo || '',
   };
 }
 
@@ -503,6 +509,30 @@ const POSICAO_CAIXA = [
   { name: 'A pagar (futuro)', value: a_pagar_receber.KPIS.TOTAL_DESPESA },
 ];
 
+// CONTAS: metadata por loja/empresa (para o BI exibir comparativo entre as 24).
+// Apenas movimentos REALIZADOS no ano corrente — comparativo de operação real.
+const _contasMap = new Map();
+for (const t of [...recNorm, ...despNorm]) {
+  if (!t.conta_slug || !t.realizado) continue;
+  if (!t.data_efetiva || t.data_efetiva.getFullYear() !== REF_YEAR) continue;
+  if (!_contasMap.has(t.conta_slug)) {
+    _contasMap.set(t.conta_slug, {
+      slug: t.conta_slug,
+      label: t.conta,
+      cliente_grupo: t.cliente_grupo || '',
+      receita: 0, despesa: 0, count: 0,
+    });
+  }
+  const o = _contasMap.get(t.conta_slug);
+  if (t.kind === 'receita') o.receita += t.valor;
+  else o.despesa += t.valor;
+  o.count += 1;
+}
+const CONTAS = Array.from(_contasMap.values())
+  .map(c => ({ ...c, liquido: c.receita - c.despesa, margem: c.receita > 0 ? ((c.receita - c.despesa) / c.receita) * 100 : 0 }))
+  .sort((a, b) => b.receita - a.receita);
+console.log(`  CONTAS metadata: ${CONTAS.length} lojas no ano ${REF_YEAR}`);
+
 const COMPOSICAO_DESPESA = realizado.DESPESA_CATEGORIAS.slice(0, 6).map((c, i) => ({
   name: c.name,
   value: c.value,
@@ -538,6 +568,7 @@ function fmtPct(n, dec = 2) {
 const META = ${JSON.stringify(meta, null, 2)};
 const POSICAO_CAIXA = ${JSON.stringify(POSICAO_CAIXA, null, 2)};
 const COMPOSICAO_DESPESA = ${JSON.stringify(COMPOSICAO_DESPESA, null, 2)};
+const CONTAS = ${JSON.stringify(CONTAS, null, 2)};
 
 const SEGMENTS = ${JSON.stringify({ realizado, a_pagar_receber, tudo }, null, 2)};
 
@@ -545,7 +576,7 @@ const SEGMENTS = ${JSON.stringify({ realizado, a_pagar_receber, tudo }, null, 2)
 // realizadas + a pagar + canceladas excluidas). Usada pra cross-filter real
 // — pagina recalcula KPIs/charts/tabelas em runtime via aggregateTx().
 // Cada row eh tupla compacta pra reduzir tamanho do bundle:
-// [kind, mes, dia, categoria, cliente, valor, realizado, fornecedor, centroCusto]
+// [kind, mes, dia, categoria, cliente, valor, realizado, fornecedor, centroCusto, conta_slug]
 const ALL_TX = ${JSON.stringify([
   ...recNorm.map(t => [
     'r',
@@ -557,6 +588,7 @@ const ALL_TX = ${JSON.stringify([
     t.realizado ? 1 : 0,
     '',
     t.centroCusto || '',
+    t.conta_slug || '',
   ]),
   ...despNorm.map(t => [
     'd',
@@ -568,6 +600,7 @@ const ALL_TX = ${JSON.stringify([
     t.realizado ? 1 : 0,
     t.cliente,
     t.centroCusto || '',
+    t.conta_slug || '',
   ]),
 ])};
 
@@ -647,7 +680,7 @@ function aggregateTx(txList, year) {
 
 // applyDrilldown: filtra ALL_TX baseado em statusFilter + drilldown.
 // statusFilter: 'realizado' | 'a_pagar_receber' | 'tudo'
-// drilldown: null | { type: 'mes'|'categoria'|'cliente'|'fornecedor', value: ... }
+// drilldown: null | { type: 'mes'|'categoria'|'cliente'|'fornecedor'|'conta', value: ... }
 function filterTx(allTx, statusFilter, drilldown) {
   let out = allTx;
   if (statusFilter === 'realizado') out = out.filter(r => r[6] === 1);
@@ -657,6 +690,7 @@ function filterTx(allTx, statusFilter, drilldown) {
     else if (drilldown.type === 'categoria') out = out.filter(r => r[3] === drilldown.value);
     else if (drilldown.type === 'cliente') out = out.filter(r => r[0] === 'r' && r[4] === drilldown.value);
     else if (drilldown.type === 'fornecedor') out = out.filter(r => r[0] === 'd' && r[7] === drilldown.value);
+    else if (drilldown.type === 'conta') out = out.filter(r => r[9] === drilldown.value);
   }
   return out;
 }
@@ -680,7 +714,7 @@ function _makeBit(filter) {
     IMPOSTOS_PCT: 0,
   };
   return Object.assign({
-    META, POSICAO_CAIXA, COMPOSICAO_DESPESA,
+    META, POSICAO_CAIXA, COMPOSICAO_DESPESA, CONTAS,
     MONTHS, MONTHS_FULL, fmt, fmtK, fmtPct,
     SEGMENTS,
     MONTH_DATA: seg.MONTH_DATA,

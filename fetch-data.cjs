@@ -25,7 +25,7 @@ let cfg;
 try { cfg = require('./bi.config.js'); }
 catch (e) { console.error('ERRO: bi.config.js não encontrado. Rode `node bgp-bi.cjs init`.'); process.exit(1); }
 
-const REGISTRY = require('./adapters');
+const REGISTRY = require('./adapters/index.cjs');
 
 const adapters = (cfg.fontes && cfg.fontes.adapters) || [];
 if (adapters.length === 0) {

@@ -2,19 +2,14 @@
 .env
 .env.local
 
-# Build artifacts
-data/
-data-extras/
-data.js
-data-extras.js
-app.bundle.js
+# Cache de paginação Omie (raw da API) — pode ser regenerado via fetch-data
+data/_cache/
 
-# Reports cacheados (gerados por write-reports.cjs do cliente, ou por API on-the-fly)
-report.json
-report-*.json
-
-# Cliente-específico (cada cliente tem seu próprio)
-bi.config.js
+# Dumps raw da API Omie (sensíveis, contém dados de cliente sem agregação)
+# data.js (build artifact) é committado e contém apenas agregados
+data/*.json
+data/contas/
+!data/.gitkeep
 
 # Node
 node_modules/
@@ -28,5 +23,7 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Não ignora QUICK_START.pdf — ele é distribuído junto pra time não-dev
-# QUICK_START.pdf
+# IMPORTANTE — NÃO ignorar build artifacts:
+#   data.js, data-extras.js, app.bundle.js são committados (Docker COPY)
+#   bi.config.js é committado (config do cliente sem credenciais)
+#   report*.json são committados (relatórios IA pré-gerados)

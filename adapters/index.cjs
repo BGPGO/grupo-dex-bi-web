@@ -6,6 +6,7 @@
 
 module.exports = {
   'omie': require('./omie.cjs'),
+  'omie-multi': require('./omie-multi.cjs'),
   'conta-azul': require('./conta-azul.cjs'),
   'manual-xlsx': require('./manual-xlsx.cjs'),
   // 'bling': require('./bling.cjs'),         // TODO
