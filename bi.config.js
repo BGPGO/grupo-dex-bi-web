@@ -4,7 +4,7 @@ module.exports = {
   cliente: {
     nome: "Grupo DEX",
     subdomain: "grupo-dex-bi",
-    coolify_app_uuid: "",                  // preenchido após provisionamento
+    coolify_app_uuid: "f4attgh97y0hciqbhu4d39t9",
     cor_primaria: "#22d3ee",
   },
 
