@@ -1,37 +1,38 @@
-/* PageOrcamento — Orçado vs Realizado estilo fin40
+/* PageOrcamento — Orçado vs Realizado estilo fin40 + Plugado pra frente
  *
- * Padrão fin40 OrcadoRealizadoTab + MiniLineChart:
- *   - Cada célula da tabela mostra REAL grande + ORÇADO pequeno embaixo (sobreposição visual)
- *   - Gráficos: linha sólida (Real) + linha tracejada (Orçado) no mesmo SVG
- *
- * Regra do orçamento (definida pelo usuário):
- *   Receita orçada = melhor mês de receita do REF_YEAR
- *   Custo orçado   = média dos meses ativos
- *   Despesa orçada = média dos meses ativos
- *   Imposto orçado = média dos meses ativos
- *
- * Filtro de empresa: usa DRE_BY_CONTA pré-computado (split custo/imposto por loja).
+ * - Gráficos plotam todos os 12 meses: REAL até o último mês com dado;
+ *   PROJETADO (tracejado, mesma cor mais clara) até dezembro usando orçamento.
+ * - Sem preserveAspectRatio="none" → não distorce mais.
+ * - Adiciona gráfico de saldo acumulado anual mostrando "efeito no fim do ano".
  */
 
-// ===== Mini gráfico de linha sobreposta (fin40 MiniLineChart) =====
-const OvLineChart = ({ data, height = 180, label = "" }) => {
-  // data: [{ m, real, orcado }]
+// ===== Linha overlay com plugagem forward =====
+// data: [{ m, real, orcado, isRealized }]. Real após último isRealized é projetado (tracejado).
+const OvLineChart = ({ data, height = 200, label = "" }) => {
   if (!data || data.length === 0) return null;
-  const W = 720, ml = 50, mr = 10, mt = 10, mb = 26;
+  const W = 720, ml = 50, mr = 12, mt = 12, mb = 28;
   const cw = W - ml - mr;
   const ch = height - mt - mb;
-  const allVals = data.flatMap(d => [d.real, d.orcado]);
+  const allVals = data.flatMap(d => [d.real, d.orcado]).filter(v => v != null);
   const minVal = Math.min(0, ...allVals);
   const maxVal = Math.max(0, ...allVals);
   const range = (maxVal - minVal) || 1;
   const pad = range * 0.12;
   const yMin = minVal - pad;
   const yMax = maxVal + pad;
-  const x = (i) => ml + (i / (data.length - 1)) * cw;
+  const x = (i) => ml + (i / Math.max(1, data.length - 1)) * cw;
   const y = (v) => mt + ch - ((v - yMin) / (yMax - yMin)) * ch;
   const yZero = y(0);
-  const realPath = data.map((d, i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(d.real).toFixed(1)}`).join(' ');
-  const orcPath  = data.map((d, i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(d.orcado).toFixed(1)}`).join(' ');
+  const lastRealIdx = data.reduce((a, d, i) => d.isRealized ? i : a, -1);
+  // Real path = só índices realizados (sólido).
+  const realData = data.filter((d, i) => i <= lastRealIdx);
+  const realPath = realData.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(data.indexOf(d)).toFixed(1)},${y(d.real).toFixed(1)}`).join(' ');
+  // Forecast path = do último real ate o final, usando d.real (já vem com orcado pluggado pra frente).
+  const fcData = data.filter((d, i) => i >= lastRealIdx);
+  const fcPath = fcData.length >= 2
+    ? fcData.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(data.indexOf(d)).toFixed(1)},${y(d.real).toFixed(1)}`).join(' ')
+    : '';
+  const orcPath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(d.orcado).toFixed(1)}`).join(' ');
   const fmtTick = (v) => {
     const a = Math.abs(v);
     if (a >= 1e6) return (v/1e6).toFixed(1).replace(".",",")+"M";
@@ -40,47 +41,66 @@ const OvLineChart = ({ data, height = 180, label = "" }) => {
   };
   const yTicks = 5;
   const step = (yMax - yMin) / yTicks;
+  // Linha vertical separando "real" de "projetado" (depois do último real)
+  const splitX = lastRealIdx >= 0 && lastRealIdx < data.length - 1 ? x(lastRealIdx) : null;
   return (
     <div style={{ background: "var(--bg)", borderRadius: 8, padding: 10, border: "1px solid var(--border)" }}>
       {label && <div style={{ fontSize: 11, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600, marginBottom: 4 }}>{label}</div>}
-      <svg width="100%" viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" style={{ display: "block", height }}>
-        {Array.from({length:yTicks+1}).map((_,i) => {
-          const v = yMin + i*step;
-          const yy = y(v);
-          return (<g key={i}>
-            <line x1={ml} y1={yy} x2={W-mr} y2={yy} stroke="var(--border)" strokeDasharray="3,3" />
-            <text x={ml-5} y={yy+3} textAnchor="end" fontSize="9" fill="var(--fg-3)">{fmtTick(v)}</text>
-          </g>);
-        })}
-        {yMin < 0 && yMax > 0 && (
-          <line x1={ml} y1={yZero} x2={W-mr} y2={yZero} stroke="var(--fg-3)" strokeDasharray="2,2" strokeWidth={0.7} />
-        )}
-        <path d={orcPath} fill="none" stroke="var(--fg-3)" strokeWidth={1.5} strokeDasharray="6,4" />
-        <path d={realPath} fill="none" stroke="var(--cyan)" strokeWidth={2.5} />
-        {data.map((d,i) => (
-          <circle key={i} cx={x(i)} cy={y(d.real)} r={3} fill="var(--cyan)" />
-        ))}
-        {data.map((d,i) => (
-          <text key={"l"+i} x={x(i)} y={height-4} textAnchor="middle" fontSize="9" fill="var(--fg-3)">{(d.m||"").slice(0,3)}</text>
-        ))}
-      </svg>
-      <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 4, fontSize: 10, color: "var(--fg-3)" }}>
+      <div style={{ width: "100%", maxWidth: W }}>
+        <svg viewBox={`0 0 ${W} ${height}`} style={{ display: "block", width: "100%", height: "auto" }}>
+          {Array.from({length:yTicks+1}).map((_,i) => {
+            const v = yMin + i*step;
+            const yy = y(v);
+            return (<g key={i}>
+              <line x1={ml} y1={yy} x2={W-mr} y2={yy} stroke="var(--border)" strokeDasharray="3,3" />
+              <text x={ml-5} y={yy+3} textAnchor="end" fontSize="10" fill="var(--fg-3)">{fmtTick(v)}</text>
+            </g>);
+          })}
+          {yMin < 0 && yMax > 0 && (
+            <line x1={ml} y1={yZero} x2={W-mr} y2={yZero} stroke="var(--fg-3)" strokeDasharray="2,2" strokeWidth={0.7} />
+          )}
+          {/* Banda do horizonte de projeção */}
+          {splitX != null && (
+            <rect x={splitX} y={mt} width={W-mr-splitX} height={ch} fill="var(--cyan)" opacity={0.04} />
+          )}
+          {/* Orçado (tracejado cinza) */}
+          <path d={orcPath} fill="none" stroke="var(--fg-3)" strokeWidth={1.5} strokeDasharray="6,4" />
+          {/* Forecast (cyan claro tracejado) */}
+          {fcPath && <path d={fcPath} fill="none" stroke="var(--cyan)" strokeWidth={2} strokeDasharray="5,4" opacity={0.7} />}
+          {/* Real (cyan sólido) */}
+          {realPath && <path d={realPath} fill="none" stroke="var(--cyan)" strokeWidth={2.5} />}
+          {/* Pontos */}
+          {realData.map((d,i) => (
+            <circle key={"r"+i} cx={x(data.indexOf(d))} cy={y(d.real)} r={3} fill="var(--cyan)" />
+          ))}
+          {/* Linha vertical de "agora" */}
+          {splitX != null && (
+            <g>
+              <line x1={splitX} y1={mt} x2={splitX} y2={mt+ch} stroke="var(--cyan)" strokeWidth={1} strokeDasharray="2,3" opacity={0.5} />
+              <text x={splitX+3} y={mt+9} fontSize="9" fill="var(--cyan)" opacity={0.85}>projeção →</text>
+            </g>
+          )}
+          {data.map((d,i) => (
+            <text key={"l"+i} x={x(i)} y={height-6} textAnchor="middle" fontSize="10" fill="var(--fg-3)">{(d.m||"").slice(0,3)}</text>
+          ))}
+        </svg>
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, fontSize: 11, color: "var(--fg-3)", flexWrap: "wrap" }}>
         <span><span style={{ display: "inline-block", width: 14, height: 2, background: "var(--cyan)", verticalAlign: "middle", marginRight: 4 }} />Realizado</span>
-        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "1.5px dashed var(--fg-3)", verticalAlign: "middle", marginRight: 4 }} />Orçado</span>
+        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "2px dashed var(--cyan)", verticalAlign: "middle", marginRight: 4, opacity: 0.7 }} />Projeção (orçamento)</span>
+        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "1.5px dashed var(--fg-3)", verticalAlign: "middle", marginRight: 4 }} />Orçado mensal</span>
       </div>
     </div>
   );
 };
 
-// ===== Bar chart com sobreposição: 2 barras lado-a-lado por categoria, +
-//       linha tracejada do orçado no topo da barra (estilo fin40 stacked) =====
-const OvBarChart = ({ data, height = 180, label = "" }) => {
-  // data: [{ m, real, orcado }]
+// ===== Bar chart: real (sólido) + projeção (mais transparente) + linha overlay orçado =====
+const OvBarChart = ({ data, height = 200, label = "" }) => {
   if (!data || data.length === 0) return null;
-  const W = 720, ml = 50, mr = 10, mt = 10, mb = 26;
+  const W = 720, ml = 50, mr = 12, mt = 12, mb = 28;
   const cw = W - ml - mr;
   const ch = height - mt - mb;
-  const allVals = data.flatMap(d => [d.real, d.orcado]);
+  const allVals = data.flatMap(d => [d.real, d.orcado]).filter(v => v != null);
   const minVal = Math.min(0, ...allVals);
   const maxVal = Math.max(0, ...allVals);
   const range = (maxVal - minVal) || 1;
@@ -88,7 +108,7 @@ const OvBarChart = ({ data, height = 180, label = "" }) => {
   const yMin = minVal - pad;
   const yMax = maxVal + pad;
   const slot = cw / data.length;
-  const barW = slot * 0.55;
+  const barW = slot * 0.6;
   const x = (i) => ml + i*slot + (slot - barW)/2;
   const y = (v) => mt + ch - ((v - yMin) / (yMax - yMin)) * ch;
   const yZero = y(0);
@@ -100,43 +120,154 @@ const OvBarChart = ({ data, height = 180, label = "" }) => {
   };
   const yTicks = 5;
   const step = (yMax - yMin) / yTicks;
+  const lastRealIdx = data.reduce((a, d, i) => d.isRealized ? i : a, -1);
   return (
     <div style={{ background: "var(--bg)", borderRadius: 8, padding: 10, border: "1px solid var(--border)" }}>
       {label && <div style={{ fontSize: 11, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600, marginBottom: 4 }}>{label}</div>}
-      <svg width="100%" viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" style={{ display: "block", height }}>
-        {Array.from({length:yTicks+1}).map((_,i) => {
-          const v = yMin + i*step;
-          const yy = y(v);
-          return (<g key={i}>
-            <line x1={ml} y1={yy} x2={W-mr} y2={yy} stroke="var(--border)" strokeDasharray="3,3" />
-            <text x={ml-5} y={yy+3} textAnchor="end" fontSize="9" fill="var(--fg-3)">{fmtTick(v)}</text>
-          </g>);
-        })}
-        {data.map((d,i) => {
-          const xCenter = x(i) + barW/2;
-          const isPos = d.real >= 0;
-          const yReal = y(d.real);
-          const realH = Math.abs(yZero - yReal);
-          const yOrc = y(d.orcado);
-          const widthOrc = barW * 1.15;
-          return (
-            <g key={i}>
-              {/* Barra real (sólida) */}
-              <rect x={x(i)} y={isPos ? yReal : yZero} width={barW} height={Math.max(1, realH)}
-                fill={isPos ? "var(--cyan)" : "var(--red)"} rx={2} opacity={0.85} />
-              {/* Linha do orçado em cima — overlay (estilo fin40 dashed) */}
-              <line x1={xCenter - widthOrc/2} y1={yOrc} x2={xCenter + widthOrc/2} y2={yOrc}
-                stroke="var(--fg-2)" strokeWidth={2.2} strokeDasharray="4,3" />
-            </g>
-          );
-        })}
-        {data.map((d,i) => (
-          <text key={"l"+i} x={x(i) + barW/2} y={height-4} textAnchor="middle" fontSize="9" fill="var(--fg-3)">{(d.m||"").slice(0,3)}</text>
-        ))}
-      </svg>
-      <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 4, fontSize: 10, color: "var(--fg-3)" }}>
+      <div style={{ width: "100%", maxWidth: W }}>
+        <svg viewBox={`0 0 ${W} ${height}`} style={{ display: "block", width: "100%", height: "auto" }}>
+          {Array.from({length:yTicks+1}).map((_,i) => {
+            const v = yMin + i*step;
+            const yy = y(v);
+            return (<g key={i}>
+              <line x1={ml} y1={yy} x2={W-mr} y2={yy} stroke="var(--border)" strokeDasharray="3,3" />
+              <text x={ml-5} y={yy+3} textAnchor="end" fontSize="10" fill="var(--fg-3)">{fmtTick(v)}</text>
+            </g>);
+          })}
+          {data.map((d,i) => {
+            const xCenter = x(i) + barW/2;
+            const isPos = (d.real||0) >= 0;
+            const yReal = y(d.real||0);
+            const realH = Math.abs(yZero - yReal);
+            const yOrc = y(d.orcado||0);
+            const widthOrc = barW * 1.2;
+            const isProj = !d.isRealized;
+            return (
+              <g key={i}>
+                <rect x={x(i)} y={isPos ? yReal : yZero} width={barW} height={Math.max(1, realH)}
+                  fill={isPos ? "var(--cyan)" : "var(--red)"} rx={2}
+                  opacity={isProj ? 0.35 : 0.85}
+                  stroke={isProj ? "var(--cyan)" : "none"}
+                  strokeWidth={isProj ? 1 : 0}
+                  strokeDasharray={isProj ? "3,2" : ""}
+                />
+                <line x1={xCenter - widthOrc/2} y1={yOrc} x2={xCenter + widthOrc/2} y2={yOrc}
+                  stroke="var(--fg-2)" strokeWidth={2} strokeDasharray="4,3" />
+              </g>
+            );
+          })}
+          {lastRealIdx >= 0 && lastRealIdx < data.length - 1 && (
+            <line x1={x(lastRealIdx) + barW + (slot-barW)/2} y1={mt}
+              x2={x(lastRealIdx) + barW + (slot-barW)/2} y2={mt+ch}
+              stroke="var(--cyan)" strokeWidth={1} strokeDasharray="2,3" opacity={0.5} />
+          )}
+          {data.map((d,i) => (
+            <text key={"l"+i} x={x(i) + barW/2} y={height-6} textAnchor="middle" fontSize="10" fill="var(--fg-3)">{(d.m||"").slice(0,3)}</text>
+          ))}
+        </svg>
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, fontSize: 11, color: "var(--fg-3)", flexWrap: "wrap" }}>
         <span><span style={{ display: "inline-block", width: 14, height: 8, background: "var(--cyan)", verticalAlign: "middle", marginRight: 4, borderRadius: 2 }} />Realizado</span>
+        <span><span style={{ display: "inline-block", width: 14, height: 8, border: "1px dashed var(--cyan)", background: "rgba(34,211,238,0.18)", verticalAlign: "middle", marginRight: 4, borderRadius: 2 }} />Projeção (orçamento)</span>
         <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "2px dashed var(--fg-2)", verticalAlign: "middle", marginRight: 4 }} />Orçado</span>
+      </div>
+    </div>
+  );
+};
+
+// ===== Saldo acumulado: real até abril + projeção até dez =====
+const OvCumChart = ({ data, height = 220, label = "" }) => {
+  // data: [{ m, real_acum, orc_acum, isRealized }]
+  if (!data || data.length === 0) return null;
+  const W = 720, ml = 60, mr = 14, mt = 14, mb = 30;
+  const cw = W - ml - mr;
+  const ch = height - mt - mb;
+  const allVals = data.flatMap(d => [d.real_acum, d.orc_acum]).filter(v => v != null);
+  const minVal = Math.min(0, ...allVals);
+  const maxVal = Math.max(0, ...allVals);
+  const range = (maxVal - minVal) || 1;
+  const pad = range * 0.12;
+  const yMin = minVal - pad;
+  const yMax = maxVal + pad;
+  const x = (i) => ml + (i / Math.max(1, data.length - 1)) * cw;
+  const y = (v) => mt + ch - ((v - yMin) / (yMax - yMin)) * ch;
+  const yZero = y(0);
+  const lastRealIdx = data.reduce((a, d, i) => d.isRealized ? i : a, -1);
+  const splitX = lastRealIdx >= 0 && lastRealIdx < data.length - 1 ? x(lastRealIdx) : null;
+  // Real path: 0..lastRealIdx
+  const realPath = data.slice(0, lastRealIdx+1).map((d, i) =>
+    `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(d.real_acum).toFixed(1)}`).join(' ');
+  // Forecast: continua do último real
+  const fc = data.slice(lastRealIdx >= 0 ? lastRealIdx : 0);
+  const fcPath = fc.length >= 2 ? fc.map((d, i) => {
+    const idx = data.indexOf(d);
+    return `${i === 0 ? 'M' : 'L'}${x(idx).toFixed(1)},${y(d.real_acum).toFixed(1)}`;
+  }).join(' ') : '';
+  // Orcado path: linha straight do orcamento puro (12 × orcado_mes acumulado)
+  const orcPath = data.map((d,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(d.orc_acum).toFixed(1)}`).join(' ');
+  const fmtTick = (v) => {
+    const a = Math.abs(v);
+    if (a >= 1e6) return (v/1e6).toFixed(1).replace(".",",")+"M";
+    if (a >= 1e3) return (v/1e3).toFixed(0)+"k";
+    return v.toFixed(0);
+  };
+  const yTicks = 5;
+  const step = (yMax - yMin) / yTicks;
+  // Final: valor projetado e valor orçado em dez
+  const finalReal = data[data.length-1]?.real_acum;
+  const finalOrc = data[data.length-1]?.orc_acum;
+  return (
+    <div style={{ background: "var(--bg)", borderRadius: 8, padding: 10, border: "1px solid var(--border)" }}>
+      {label && <div style={{ fontSize: 11, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600, marginBottom: 4 }}>{label}</div>}
+      <div style={{ width: "100%", maxWidth: W }}>
+        <svg viewBox={`0 0 ${W} ${height}`} style={{ display: "block", width: "100%", height: "auto" }}>
+          {Array.from({length:yTicks+1}).map((_,i) => {
+            const v = yMin + i*step;
+            const yy = y(v);
+            return (<g key={i}>
+              <line x1={ml} y1={yy} x2={W-mr} y2={yy} stroke="var(--border)" strokeDasharray="3,3" />
+              <text x={ml-5} y={yy+3} textAnchor="end" fontSize="10" fill="var(--fg-3)">{fmtTick(v)}</text>
+            </g>);
+          })}
+          {yMin < 0 && yMax > 0 && (
+            <line x1={ml} y1={yZero} x2={W-mr} y2={yZero} stroke="var(--fg-3)" strokeWidth={0.7} />
+          )}
+          {splitX != null && (
+            <rect x={splitX} y={mt} width={W-mr-splitX} height={ch} fill="var(--cyan)" opacity={0.04} />
+          )}
+          <path d={orcPath} fill="none" stroke="var(--fg-3)" strokeWidth={1.5} strokeDasharray="6,4" />
+          {fcPath && <path d={fcPath} fill="none" stroke="var(--cyan)" strokeWidth={2} strokeDasharray="5,4" opacity={0.65} />}
+          {realPath && <path d={realPath} fill="none" stroke="var(--cyan)" strokeWidth={3} />}
+          {data.slice(0, lastRealIdx+1).map((d,i) => (
+            <circle key={"r"+i} cx={x(i)} cy={y(d.real_acum)} r={3.5} fill="var(--cyan)" />
+          ))}
+          {/* Marker no fim do ano (projetado) */}
+          {finalReal != null && (
+            <g>
+              <circle cx={x(data.length-1)} cy={y(finalReal)} r={5} fill="var(--cyan)" opacity={0.85} stroke="var(--bg)" strokeWidth={2} />
+              <text x={x(data.length-1)-6} y={y(finalReal)-8} textAnchor="end" fontSize="11" fontWeight="700" fill={finalReal >= 0 ? "var(--green)" : "var(--red)"}>
+                {fmtTick(finalReal)}
+              </text>
+            </g>
+          )}
+          {finalOrc != null && (
+            <text x={x(data.length-1)-6} y={y(finalOrc)+12} textAnchor="end" fontSize="10" fill="var(--fg-3)">{fmtTick(finalOrc)}</text>
+          )}
+          {splitX != null && (
+            <g>
+              <line x1={splitX} y1={mt} x2={splitX} y2={mt+ch} stroke="var(--cyan)" strokeWidth={1} strokeDasharray="2,3" opacity={0.5} />
+              <text x={splitX+3} y={mt+10} fontSize="9" fill="var(--cyan)" opacity={0.85}>projeção →</text>
+            </g>
+          )}
+          {data.map((d,i) => (
+            <text key={"l"+i} x={x(i)} y={height-6} textAnchor="middle" fontSize="10" fill="var(--fg-3)">{(d.m||"").slice(0,3)}</text>
+          ))}
+        </svg>
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, fontSize: 11, color: "var(--fg-3)", flexWrap: "wrap" }}>
+        <span><span style={{ display: "inline-block", width: 14, height: 3, background: "var(--cyan)", verticalAlign: "middle", marginRight: 4 }} />Real acumulado</span>
+        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "2px dashed var(--cyan)", verticalAlign: "middle", marginRight: 4, opacity: 0.65 }} />Projeção pra fim do ano</span>
+        <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "1.5px dashed var(--fg-3)", verticalAlign: "middle", marginRight: 4 }} />Orçado puro (12× orçado/mês)</span>
       </div>
     </div>
   );
@@ -146,7 +277,6 @@ const OvBarChart = ({ data, height = 180, label = "" }) => {
 const OvCell = ({ real, orcado, isRealized, neg = false }) => {
   const fmt = (n) => "R$ " + formatBR(n||0, 0);
   const delta = orcado === 0 || !isRealized ? null : ((real - orcado) / orcado) * 100;
-  // Pra real == 0 (mes futuro), só mostra orçado
   if (!isRealized) {
     return (
       <td className="num" style={{ color: "var(--fg-3)" }}>
@@ -157,7 +287,6 @@ const OvCell = ({ real, orcado, isRealized, neg = false }) => {
   }
   const realColor = neg ? "var(--red)" : (real >= 0 ? "var(--green)" : "var(--red)");
   const dColor = delta == null ? "var(--fg-3)" : (delta >= 0 ? "var(--green)" : "var(--red)");
-  // Para custo/despesa (neg=true), variação positiva (gastou mais que orçou) é RUIM (vermelho)
   const dColorAdjusted = neg && delta != null
     ? (delta <= 0 ? "var(--green)" : "var(--red)")
     : dColor;
@@ -183,8 +312,6 @@ const PageOrcamento = ({ statusFilter, drilldown, setDrilldown, year, month }) =
 
   const isContaFilter = drilldown && drilldown.type === 'conta';
 
-  // Quando filtro de empresa ativo, usa DRE_BY_CONTA pré-computado (split completo).
-  // Senão, usa MONTH_DRE / ORCAMENTO consolidados.
   const { DRE, ORC, contaLabel } = useMemo(() => {
     if (isContaFilter && B.DRE_BY_CONTA && B.DRE_BY_CONTA[drilldown.value]) {
       const d = B.DRE_BY_CONTA[drilldown.value];
@@ -200,7 +327,6 @@ const PageOrcamento = ({ statusFilter, drilldown, setDrilldown, year, month }) =
   const totalDes = DRE.reduce((s,m)=>s+m.despesa, 0);
   const totalImp = DRE.reduce((s,m)=>s+m.imposto, 0);
   const totalLiq = totalRec - totalCus - totalImp - totalDes;
-  // Total ano = real YTD + orçado meses restantes
   const projRec = totalRec + (ORC.receita_mes||0) * monthsRemaining;
   const projCus = totalCus + (ORC.custo_mes  ||0) * monthsRemaining;
   const projDes = totalDes + (ORC.despesa_mes||0) * monthsRemaining;
@@ -208,23 +334,45 @@ const PageOrcamento = ({ statusFilter, drilldown, setDrilldown, year, month }) =
   const projLiq = projRec - projCus - projImp - projDes;
 
   const fmtBRL = (n) => "R$ " + formatBR(n||0, 0);
-  const ddata = DRE.map(m => ({
-    m: m.m,
-    real_rec: m.count > 0 ? m.receita : 0,
-    real_cus: m.count > 0 ? m.custo : 0,
-    real_des: m.count > 0 ? m.despesa : 0,
-    real_imp: m.count > 0 ? m.imposto : 0,
-    real_liq: m.count > 0 ? m.liquido : 0,
-    isRealized: m.count > 0,
-  }));
+
   const orcRec = ORC.receita_mes || 0;
   const orcCus = ORC.custo_mes || 0;
   const orcDes = ORC.despesa_mes || 0;
   const orcImp = ORC.imposto_mes || 0;
   const orcLiq = orcRec - orcCus - orcDes - orcImp;
-  const liqChart  = ddata.map(d => ({ m: d.m, real: d.real_liq, orcado: orcLiq }));
-  const recChart  = ddata.map(d => ({ m: d.m, real: d.real_rec, orcado: orcRec }));
-  const desComposChart = ddata.map(d => ({ m: d.m, real: d.real_cus + d.real_des + d.real_imp, orcado: orcCus + orcDes + orcImp }));
+
+  // Dados pros gráficos (12 meses): real onde tem, orçado plugado pra frente
+  const liqChart = DRE.map(m => ({
+    m: m.m,
+    real: m.count > 0 ? m.liquido : orcLiq,         // plugado pra frente
+    orcado: orcLiq,
+    isRealized: m.count > 0,
+  }));
+  const recChart = DRE.map(m => ({
+    m: m.m,
+    real: m.count > 0 ? m.receita : orcRec,
+    orcado: orcRec,
+    isRealized: m.count > 0,
+  }));
+  const desComposChart = DRE.map(m => ({
+    m: m.m,
+    real: m.count > 0 ? (m.custo + m.despesa + m.imposto) : (orcCus + orcDes + orcImp),
+    orcado: orcCus + orcDes + orcImp,
+    isRealized: m.count > 0,
+  }));
+  // Acumulado: vai somando mês a mês — real até último mês com count, depois projeção
+  const cumChart = (() => {
+    let realAcum = 0, orcAcum = 0;
+    return DRE.map((m, i) => {
+      if (m.count > 0) realAcum += m.liquido;
+      else realAcum += orcLiq;
+      orcAcum += orcLiq;
+      return { m: m.m, real_acum: realAcum, orc_acum: orcAcum, isRealized: m.count > 0 };
+    });
+  })();
+
+  const finalProjLiq = cumChart[cumChart.length-1]?.real_acum || 0;
+  const finalOrcLiq = cumChart[cumChart.length-1]?.orc_acum || 0;
 
   return (
     <div className="page">
@@ -240,7 +388,6 @@ const PageOrcamento = ({ statusFilter, drilldown, setDrilldown, year, month }) =
 
       <DrilldownBadge drilldown={drilldown} onClear={() => setDrilldown(null)} />
 
-      {/* === Cards de orçamento === */}
       <div className="kpi-row">
         <KpiTile tone="green" label="Receita orçada (/mês)" value={fmtBRL(orcRec)} hint={`Melhor mês: ${MONTHS_FULL[ORC.melhor_mes_idx||0] || "—"}`} />
         <KpiTile tone="amber" label="Custo médio (/mês)"    value={fmtBRL(orcCus)} hint={`Média de ${ORC.meses_ativos||0} meses`} />
@@ -248,16 +395,27 @@ const PageOrcamento = ({ statusFilter, drilldown, setDrilldown, year, month }) =
         <KpiTile tone={orcLiq >= 0 ? "cyan" : "red"} label="Líquido orçado (/mês)" value={fmtBRL(orcLiq)} hint={`Anual: R$ ${formatBR(orcLiq*12, 0)}`} />
       </div>
 
+      {/* === Acumulado anual: efeito no fim do ano === */}
+      <div className="card">
+        <h2 className="card-title">Saldo acumulado do ano — efeito no fim de dezembro</h2>
+        <OvCumChart data={cumChart} label={`Real (${monthsRealized}m) + projeção dos ${monthsRemaining}m restantes vs orçamento puro`} />
+        <div className="status-line" style={{ marginTop: 8, display: "flex", gap: 24, flexWrap: "wrap" }}>
+          <span>Projeção de fechamento {REF_YEAR}: <b style={{ color: finalProjLiq >= 0 ? "var(--green)" : "var(--red)" }}>R$ {formatBR(finalProjLiq, 0)}</b></span>
+          <span>Orçamento puro (12 × {fmtBRL(orcLiq)}): <b style={{ color: finalOrcLiq >= 0 ? "var(--green)" : "var(--red)" }}>R$ {formatBR(finalOrcLiq, 0)}</b></span>
+          <span>Diferença: <b style={{ color: (finalProjLiq - finalOrcLiq) >= 0 ? "var(--green)" : "var(--red)" }}>R$ {formatBR(finalProjLiq - finalOrcLiq, 0)}</b></span>
+        </div>
+      </div>
+
       {/* === Gráficos overlay === */}
       <div className="row" style={{ gridTemplateColumns: "1fr", gap: 16 }}>
         <div className="card">
-          <h2 className="card-title">Líquido — Real vs Orçado</h2>
+          <h2 className="card-title">Líquido mensal — Real até hoje + Projetado até dez</h2>
           <OvLineChart data={liqChart} label={`${contaLabel || "Consolidado"} · ${REF_YEAR}`} />
         </div>
       </div>
       <div className="row" style={{ gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div className="card">
-          <h2 className="card-title">Receita — Real vs Orçado</h2>
+          <h2 className="card-title">Receita — Real + Projetado</h2>
           <OvBarChart data={recChart} label="Receita mensal" />
         </div>
         <div className="card">
@@ -266,7 +424,7 @@ const PageOrcamento = ({ statusFilter, drilldown, setDrilldown, year, month }) =
         </div>
       </div>
 
-      {/* === Tabela compacta com sobreposição === */}
+      {/* === Tabela compacta === */}
       <div className="card">
         <h2 className="card-title">Tabela mensal · Real (orçado / Δ%)</h2>
         <div className="t-scroll" style={{ overflowX: "auto" }}>
@@ -286,7 +444,7 @@ const PageOrcamento = ({ statusFilter, drilldown, setDrilldown, year, month }) =
                 const isR = m.count > 0;
                 return (
                   <tr key={i}>
-                    <td><b>{MONTHS_FULL[i]}</b>{!isR && <span style={{ color: "var(--fg-3)", marginLeft: 6, fontSize: 10 }}>(sem real)</span>}</td>
+                    <td><b>{MONTHS_FULL[i]}</b>{!isR && <span style={{ color: "var(--fg-3)", marginLeft: 6, fontSize: 10 }}>(projetado)</span>}</td>
                     <OvCell real={m.receita} orcado={orcRec} isRealized={isR} />
                     <OvCell real={m.custo}   orcado={orcCus} isRealized={isR} neg />
                     <OvCell real={m.imposto} orcado={orcImp} isRealized={isR} neg />
@@ -307,11 +465,11 @@ const PageOrcamento = ({ statusFilter, drilldown, setDrilldown, year, month }) =
           </table>
         </div>
         <div className="status-line" style={{ marginTop: 8 }}>
-          <b>TOTAL projetado</b> = realizado YTD ({monthsRealized} {monthsRealized === 1 ? "mês" : "meses"}) + orçamento dos {monthsRemaining} {monthsRemaining === 1 ? "mês" : "meses"} restantes — mesma lógica do Ano 1 do Valuation (alinhado fin40).
+          <b>TOTAL projetado</b> = realizado YTD ({monthsRealized} {monthsRealized === 1 ? "mês" : "meses"}) + orçamento dos {monthsRemaining} {monthsRemaining === 1 ? "mês" : "meses"} restantes.
         </div>
       </div>
     </div>
   );
 };
 
-Object.assign(window, { PageOrcamento, OvLineChart, OvBarChart });
+Object.assign(window, { PageOrcamento, OvLineChart, OvBarChart, OvCumChart });
