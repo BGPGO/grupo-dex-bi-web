@@ -386,6 +386,52 @@ console.log(`    Despesa media:  R$ ${ORCAMENTO.despesa_mes.toFixed(2)}`);
 console.log(`    Imposto medio:  R$ ${ORCAMENTO.imposto_mes.toFixed(2)}`);
 console.log(`    Liquido orcado: R$ ${ORCAMENTO.liquido_mes.toFixed(2)} (anual R$ ${ORCAMENTO.liquido_ano.toFixed(2)})`);
 
+// DRE_BY_CONTA: mesma estrutura (MONTH_DRE + ORCAMENTO) por conta_slug.
+// Permite que telas de Orçamento/Valuation funcionem com filtro de empresa
+// sem precisar recomputar no browser (56k movs × N filters seria caro).
+const DRE_BY_CONTA = {};
+const _slugSet = new Set([...recNorm, ...despNorm].map(t => t.conta_slug).filter(Boolean));
+for (const slug of _slugSet) {
+  const dre = MONTHS_FULL.map(m => ({ m, receita: 0, custo: 0, despesa: 0, imposto: 0, outros: 0, liquido: 0, count: 0 }));
+  let label = slug;
+  for (const t of [...recNorm, ...despNorm]) {
+    if (t.conta_slug !== slug) continue;
+    if (!t.realizado || !t.data_efetiva) continue;
+    if (t.data_efetiva.getFullYear() !== REF_YEAR) continue;
+    const mIdx = t.data_efetiva.getMonth();
+    const md = dre[mIdx];
+    if (t.kind === 'receita') md.receita += t.valor;
+    else {
+      const sec = t.secao || 'despesa';
+      if (sec === 'custo') md.custo += t.valor;
+      else if (sec === 'imposto') md.imposto += t.valor;
+      else if (sec === 'outros') md.outros += t.valor;
+      else md.despesa += t.valor;
+    }
+    md.count += 1;
+    if (t.conta && !label.includes(t.conta)) label = t.conta;
+  }
+  for (const md of dre) md.liquido = md.receita - md.custo - md.imposto - md.despesa;
+  const active = dre.filter(m => m.count > 0);
+  const N = Math.max(1, active.length);
+  const orc = {
+    receita_mes: Math.max(...dre.map(m => m.receita), 0),
+    custo_mes:   active.reduce((s,m)=>s+m.custo, 0)/N,
+    despesa_mes: active.reduce((s,m)=>s+m.despesa, 0)/N,
+    imposto_mes: active.reduce((s,m)=>s+m.imposto, 0)/N,
+    meses_ativos: active.length,
+    melhor_mes_idx: dre.reduce((bi,m,i,a)=>m.receita>a[bi].receita?i:bi, 0),
+  };
+  orc.liquido_mes = orc.receita_mes - orc.custo_mes - orc.imposto_mes - orc.despesa_mes;
+  orc.receita_ano = orc.receita_mes * 12;
+  orc.custo_ano   = orc.custo_mes * 12;
+  orc.despesa_ano = orc.despesa_mes * 12;
+  orc.imposto_ano = orc.imposto_mes * 12;
+  orc.liquido_ano = orc.liquido_mes * 12;
+  DRE_BY_CONTA[slug] = { label, MONTH_DRE: dre, ORCAMENTO: orc };
+}
+console.log(`  DRE_BY_CONTA: ${Object.keys(DRE_BY_CONTA).length} contas pre-computadas`);
+
 // ---------- segmentos por filtro ----------
 function selectByFilter(items, filter) {
   // 'realizado'      => status PAGO/RECEBIDO
@@ -685,6 +731,7 @@ const COMPOSICAO_DESPESA = ${JSON.stringify(COMPOSICAO_DESPESA, null, 2)};
 const CONTAS = ${JSON.stringify(CONTAS, null, 2)};
 const MONTH_DRE = ${JSON.stringify(MONTH_DRE, null, 2)};
 const ORCAMENTO = ${JSON.stringify(ORCAMENTO, null, 2)};
+const DRE_BY_CONTA = ${JSON.stringify(DRE_BY_CONTA)};
 
 const SEGMENTS = ${JSON.stringify({ realizado, a_pagar_receber, tudo }, null, 2)};
 
@@ -830,7 +877,7 @@ function _makeBit(filter) {
     IMPOSTOS_PCT: 0,
   };
   return Object.assign({
-    META, POSICAO_CAIXA, COMPOSICAO_DESPESA, CONTAS, MONTH_DRE, ORCAMENTO,
+    META, POSICAO_CAIXA, COMPOSICAO_DESPESA, CONTAS, MONTH_DRE, ORCAMENTO, DRE_BY_CONTA,
     MONTHS, MONTHS_FULL, fmt, fmtK, fmtPct,
     SEGMENTS,
     MONTH_DATA: seg.MONTH_DATA,

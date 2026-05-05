@@ -33,19 +33,21 @@ module.exports = {
       fluxo: "active",
       tesouraria: "active",
       comparativo: "active",
-      orcamento: "active",       // tela de orçamento (melhor mês receita + média custo/despesa)
       relatorio: "active",       // liberado pro Grupo DEX
       valuation: "active",       // liberado pro Grupo DEX
     },
     outros: {
+      orcamento: "active",             // tela de orçamento — análise específica
+      lojas: "active",                 // ranking 24 lojas
+      risco: "active",                 // HHI / concentração / risco
       indicators: "upsell",            // PRO
       faturamento_produto: "upsell",   // PRO
       curva_abc: "upsell",             // PRO
       marketing: "upsell",             // PRO
-      hierarquia: "hidden",            // removido do menu
-      detalhado: "hidden",             // removido do menu
-      profunda_cliente: "hidden",      // removido do menu
-      crm: "hidden",                   // removido do menu
+      hierarquia: "hidden",
+      detalhado: "hidden",
+      profunda_cliente: "hidden",
+      crm: "hidden",
     },
   },
 
