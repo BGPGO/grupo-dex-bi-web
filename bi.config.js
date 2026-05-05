@@ -33,8 +33,8 @@ module.exports = {
       fluxo: "active",
       tesouraria: "active",
       comparativo: "active",
-      relatorio: "upsell",       // PRO
-      valuation: "upsell",       // PRO
+      relatorio: "active",       // liberado pro Grupo DEX
+      valuation: "active",       // liberado pro Grupo DEX
     },
     outros: {
       indicators: "upsell",            // PRO
