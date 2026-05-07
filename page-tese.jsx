@@ -122,18 +122,17 @@ const SpaghettiFanChart = ({ forecast, color = "var(--cyan)", height = 280, comp
             </g>
           );
         })}
-        {/* Spaghetti — trajetórias finas */}
+        {/* Spaghetti — todas as trajetórias visíveis */}
         {trajs.map((t,i) => {
           const path = (y0 != null ? `M${x0},${y0} ` : `M${x(0)},${y(t[0])} `)
             + t.map((v,j) => `${j===0 && y0 == null ? '' : 'L'}${x(j).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-          return <path key={i} d={path} fill="none" stroke={color} strokeWidth={0.5} opacity={0.08} />;
+          return <path key={i} d={path} fill="none" stroke={color} strokeWidth={0.8} opacity={0.18} />;
         })}
-        {/* Banda P5-P95 */}
-        <path d={bandPath95} fill={color} opacity={0.10} />
-        {/* Banda P25-P75 */}
-        <path d={bandPath50} fill={color} opacity={0.18} />
-        {/* Mediana */}
-        <path d={medPath} fill="none" stroke={color} strokeWidth={2.5} />
+        {/* Banda P5-P95 sutil */}
+        <path d={bandPath95} fill={color} opacity={0.06} />
+        {/* Mediana — borda branca/escura grossa pra destacar sobre o spaghetti */}
+        <path d={medPath} fill="none" stroke="var(--bg)" strokeWidth={6} opacity={0.9} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={medPath} fill="none" stroke={color} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
         {/* Linha de conexão do passado */}
         {y0 != null && (
           <>
@@ -269,22 +268,7 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
   const CONTAS = B.CONTAS || [];
   const DBC = B.DRE_BY_CONTA || {};
 
-  // ===== Macro BCB API =====
-  const [macro, setMacro] = useState(null);
-  useEffect(() => {
-    const series = [
-      { id: 433, name: "IPCA" },
-      { id: 24364, name: "IBC-Br" },
-    ];
-    Promise.all(series.map(s =>
-      fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.${s.id}/dados?formato=json&dataInicial=01/05/2024`)
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(data => ({ name: s.name, data: (data||[]).map(d => ({ data: d.data, valor: parseFloat(d.valor) })) }))
-        .catch(() => ({ name: s.name, data: [] }))
-    )).then(results => {
-      setMacro(Object.fromEntries(results.map(r => [r.name, r.data])));
-    });
-  }, []);
+  // (Macro removido a pedido — pouco período de dados pra correlação confiável)
 
   // ===== Mapeamento loja → setor =====
   const lojaSetor = useMemo(() => {
@@ -293,18 +277,23 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
     return m;
   }, [CONTAS]);
 
-  // ===== ALL_TX agregado por (setor × mês × kind) — usando todos os meses realizados =====
+  // Mês corrente em curso → excluímos pra não enviesar análises (mês incompleto)
+  const _hoje = new Date();
+  const _mesCorrente = `${_hoje.getFullYear()}-${String(_hoje.getMonth()+1).padStart(2,"0")}`;
+
+  // ===== ALL_TX agregado por (setor × mês × kind) — exclui mês corrente =====
   const setorMes = useMemo(() => {
-    const out = {};   // setor → { months: Set, recByMes: Map<mes, val>, despByMes: Map<mes, val> }
+    const out = {};
     for (const sec of SETORES_ORD) out[sec] = { months: new Set(), recByMes: new Map(), despByMes: new Map() };
     for (const r of ALL_TX) {
-      if (r[6] !== 1) continue;        // só realizado
+      if (r[6] !== 1) continue;
       const mes = r[1];
       if (!mes) continue;
+      if (mes >= _mesCorrente) continue;  // exclui mês corrente em curso
       const slug = r[9];
       const sec = lojaSetor[slug];
       const o = out[sec];
-      if (!o) continue;                // setor fora dos analisados (ex: "Outros" descartado)
+      if (!o) continue;
       o.months.add(mes);
       if (r[0] === 'r') o.recByMes.set(mes, (o.recByMes.get(mes)||0) + r[5]);
       else              o.despByMes.set(mes, (o.despByMes.get(mes)||0) + r[5]);
@@ -385,7 +374,7 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
       const recByMes = new Map(), despByMes = new Map();
       for (const r of ALL_TX) {
         if (r[6] !== 1 || r[9] !== c.slug) continue;
-        const m = r[1]; if (!m) continue;
+        const m = r[1]; if (!m || m >= _mesCorrente) continue;  // exclui mês corrente
         if (r[0] === 'r') recByMes.set(m, (recByMes.get(m)||0) + r[5]);
         else despByMes.set(m, (despByMes.get(m)||0) + r[5]);
       }
@@ -482,7 +471,9 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
     };
   }, [lojaStats]);
 
-  // ===== Forecast Monte Carlo por setor (12 meses) — guarda TRAJETÓRIAS COMPLETAS =====
+  // ===== Forecast Monte Carlo por setor (12 meses) =====
+  // Simula RECEITA (trend+sazonal+ruído) E DESPESA TOTAL (componente variável escala c/ receita
+  // + componente fixa com ruído próprio), gerando trajetórias de LÍQUIDO.
   const forecastSetor = useMemo(() => {
     const out = {};
     const N_SIMS = 500;
@@ -491,91 +482,149 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
       if (!s || !s.hasData || s.n < 4) { out[sec] = null; continue; }
       const last = s.n - 1;
       const trendLast = s.trendVals[last];
-      const noiseStd = _stats.stdev(s.noise);
+      const noiseStdRec = _stats.stdev(s.noise);
       const slopeAbs = s.slopePct/100 * s.meanR;
-      const trajs = [];
-      const annual = [];
+      // Decompoe despesa em variável (∝ receita) + fixa (resíduo)
+      // Estima razão variável/receita por mês (volátil) + custo fixo médio (estável)
+      const desps = s.desp || [];
+      const recs = s.rec;
+      const ratios = recs.map((r,i) => r > 0 ? (desps[i] || 0) / r : null).filter(v => v != null);
+      const ratioMean = _stats.mean(ratios) || 0;
+      const ratioStd = _stats.stdev(ratios) || 0;
+      // Custo fixo = média da parcela "constante" (mínimo histórico ou despesa - var * receita)
+      const custoFixos = recs.map((r,i) => Math.max(0, (desps[i] || 0) - ratioMean * r));
+      const custoFixoMean = _stats.mean(custoFixos);
+      const custoFixoStd = _stats.stdev(custoFixos);
+
+      const trajsRec = [], trajsDesp = [], trajsLiq = [];
+      const annualRec = [], annualLiq = [];
       for (let k = 0; k < N_SIMS; k++) {
-        const traj = [];
-        let total = 0;
+        const trajR = [], trajD = [], trajL = [];
+        let totalR = 0, totalL = 0;
         for (let h = 1; h <= 12; h++) {
           const t = trendLast + slopeAbs * h;
           const lastM = parseInt(s.months[last].slice(5,7), 10);
           const futM = ((lastM - 1 + h) % 12);
           const seas = s.seasonal12[futM] || 0;
+          // BoxMuller normal
           const u1 = Math.random(), u2 = Math.random();
-          const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-          const v = Math.max(0, t + seas + z * noiseStd);
-          traj.push(v);
-          total += v;
+          const z1 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+          const u3 = Math.random(), u4 = Math.random();
+          const z2 = Math.sqrt(-2 * Math.log(u3)) * Math.cos(2 * Math.PI * u4);
+          const u5 = Math.random(), u6 = Math.random();
+          const z3 = Math.sqrt(-2 * Math.log(u5)) * Math.cos(2 * Math.PI * u6);
+          const recH = Math.max(0, t + seas + z1 * noiseStdRec);
+          // Razão variável/receita varia (gestão tem alguma alavanca, mas mercado pressiona)
+          const ratioH = Math.max(0, ratioMean + z2 * ratioStd);
+          const fixH = Math.max(0, custoFixoMean + z3 * custoFixoStd);
+          const despH = ratioH * recH + fixH;
+          const liqH = recH - despH;
+          trajR.push(recH); trajD.push(despH); trajL.push(liqH);
+          totalR += recH; totalL += liqH;
         }
-        trajs.push(traj);
-        annual.push(total);
+        trajsRec.push(trajR); trajsDesp.push(trajD); trajsLiq.push(trajL);
+        annualRec.push(totalR); annualLiq.push(totalL);
       }
-      // Resumo por mês (P5/P50/P95)
+      // Resumo por mês — RECEITA e LÍQUIDO (separados)
       const byMonth = [];
+      const byMonthLiq = [];
       for (let h = 0; h < 12; h++) {
-        const vals = trajs.map(t => t[h]);
+        const valsR = trajsRec.map(t => t[h]);
+        const valsL = trajsLiq.map(t => t[h]);
         byMonth.push({
           h: h+1,
-          p05: _stats.quantile(vals, 0.05),
-          p25: _stats.quantile(vals, 0.25),
-          p50: _stats.quantile(vals, 0.50),
-          p75: _stats.quantile(vals, 0.75),
-          p95: _stats.quantile(vals, 0.95),
+          p05: _stats.quantile(valsR, 0.05), p25: _stats.quantile(valsR, 0.25),
+          p50: _stats.quantile(valsR, 0.50),
+          p75: _stats.quantile(valsR, 0.75), p95: _stats.quantile(valsR, 0.95),
+        });
+        byMonthLiq.push({
+          h: h+1,
+          p05: _stats.quantile(valsL, 0.05), p25: _stats.quantile(valsL, 0.25),
+          p50: _stats.quantile(valsL, 0.50),
+          p75: _stats.quantile(valsL, 0.75), p95: _stats.quantile(valsL, 0.95),
         });
       }
       out[sec] = {
-        p05: _stats.quantile(annual, 0.05),
-        p25: _stats.quantile(annual, 0.25),
-        p50: _stats.quantile(annual, 0.50),
-        p75: _stats.quantile(annual, 0.75),
-        p95: _stats.quantile(annual, 0.95),
-        annual, trajs: trajs.slice(0, 80), byMonth,  // só 80 trajs pra render
+        // Receita (compatibilidade)
+        p05: _stats.quantile(annualRec, 0.05),
+        p25: _stats.quantile(annualRec, 0.25),
+        p50: _stats.quantile(annualRec, 0.50),
+        p75: _stats.quantile(annualRec, 0.75),
+        p95: _stats.quantile(annualRec, 0.95),
+        annual: annualRec,
+        trajs: trajsRec.slice(0, 80),
+        byMonth,
+        // Líquido (novo)
+        liq_p05: _stats.quantile(annualLiq, 0.05),
+        liq_p25: _stats.quantile(annualLiq, 0.25),
+        liq_p50: _stats.quantile(annualLiq, 0.50),
+        liq_p75: _stats.quantile(annualLiq, 0.75),
+        liq_p95: _stats.quantile(annualLiq, 0.95),
+        annualLiq,
+        trajsLiq: trajsLiq.slice(0, 80),
+        byMonthLiq,
+        probLiqPositivo: annualLiq.filter(x => x > 0).length / N_SIMS * 100,
+        // Decomposição custo (fix vs var)
+        ratioVarMean: ratioMean,
+        ratioVarStd: ratioStd,
+        custoFixoMean,
+        custoFixoStd,
+        marginContrib: 1 - ratioMean,  // % da receita que sobra após variável
+        breakEvenRevenue: ratioMean < 1 ? custoFixoMean / Math.max(1e-9, 1 - ratioMean) : Infinity,
         lastMonth: s.months[last],
         lastValue: s.rec[last],
+        lastLiq: (s.liq || [])[last] || 0,
       };
     }
     return out;
   }, [setorStats]);
 
-  // Forecast consolidado do grupo (soma das trajetórias dos 3 setores)
+  // Forecast consolidado do grupo (soma trajetórias dos setores) — receita + líquido
   const forecastGrupo = useMemo(() => {
     const setoresOk = SETORES_ORD.filter(s => forecastSetor[s]);
     if (setoresOk.length === 0) return null;
     const N_SIMS = Math.min(...setoresOk.map(s => forecastSetor[s].annual.length));
-    const annual = [];
-    const trajs = [];
+    const annual = [], annualLiq = [];
+    const trajs = [], trajsLiq = [];
     for (let k = 0; k < N_SIMS; k++) {
-      const sumTraj = Array(12).fill(0);
-      let sumAnnual = 0;
+      const sumR = Array(12).fill(0);
+      const sumL = Array(12).fill(0);
+      let aR = 0, aL = 0;
       for (const sec of setoresOk) {
         const fs = forecastSetor[sec];
-        for (let h = 0; h < 12; h++) sumTraj[h] += fs.trajs[k % fs.trajs.length]?.[h] || 0;
-        sumAnnual += fs.annual[k];
+        for (let h = 0; h < 12; h++) {
+          sumR[h] += fs.trajs[k % fs.trajs.length]?.[h] || 0;
+          sumL[h] += fs.trajsLiq[k % fs.trajsLiq.length]?.[h] || 0;
+        }
+        aR += fs.annual[k];
+        aL += fs.annualLiq[k];
       }
-      trajs.push(sumTraj);
-      annual.push(sumAnnual);
+      trajs.push(sumR); trajsLiq.push(sumL);
+      annual.push(aR); annualLiq.push(aL);
     }
-    const byMonth = [];
+    const byMonth = [], byMonthLiq = [];
     for (let h = 0; h < 12; h++) {
-      const vals = trajs.map(t => t[h]);
+      const vR = trajs.map(t => t[h]);
+      const vL = trajsLiq.map(t => t[h]);
       byMonth.push({
-        h: h+1,
-        p05: _stats.quantile(vals, 0.05),
-        p25: _stats.quantile(vals, 0.25),
-        p50: _stats.quantile(vals, 0.50),
-        p75: _stats.quantile(vals, 0.75),
-        p95: _stats.quantile(vals, 0.95),
+        h: h+1, p05: _stats.quantile(vR, 0.05), p25: _stats.quantile(vR, 0.25),
+        p50: _stats.quantile(vR, 0.50), p75: _stats.quantile(vR, 0.75), p95: _stats.quantile(vR, 0.95),
+      });
+      byMonthLiq.push({
+        h: h+1, p05: _stats.quantile(vL, 0.05), p25: _stats.quantile(vL, 0.25),
+        p50: _stats.quantile(vL, 0.50), p75: _stats.quantile(vL, 0.75), p95: _stats.quantile(vL, 0.95),
       });
     }
     return {
-      p05: _stats.quantile(annual, 0.05),
-      p25: _stats.quantile(annual, 0.25),
-      p50: _stats.quantile(annual, 0.50),
-      p75: _stats.quantile(annual, 0.75),
+      p05: _stats.quantile(annual, 0.05), p25: _stats.quantile(annual, 0.25),
+      p50: _stats.quantile(annual, 0.50), p75: _stats.quantile(annual, 0.75),
       p95: _stats.quantile(annual, 0.95),
       annual, trajs: trajs.slice(0, 80), byMonth,
+      liq_p05: _stats.quantile(annualLiq, 0.05), liq_p25: _stats.quantile(annualLiq, 0.25),
+      liq_p50: _stats.quantile(annualLiq, 0.50), liq_p75: _stats.quantile(annualLiq, 0.75),
+      liq_p95: _stats.quantile(annualLiq, 0.95),
+      annualLiq, trajsLiq: trajsLiq.slice(0, 80), byMonthLiq,
+      probLiqPositivo: annualLiq.filter(x => x > 0).length / N_SIMS * 100,
     };
   }, [forecastSetor]);
 
@@ -600,27 +649,6 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
     return { setores: setoresComDado, matrix, n: commonMonths.length };
   }, [setorStats]);
 
-  // ===== Macro corr (receita de cada setor vs séries macro) =====
-  const macroCorr = useMemo(() => {
-    if (!macro) return null;
-    const out = {};
-    for (const sec of SETORES_ORD) {
-      const s = setorStats[sec];
-      if (!s || !s.hasData) continue;
-      out[sec] = {};
-      for (const [name, series] of Object.entries(macro)) {
-        const seriesByYM = {};
-        for (const d of series) {
-          const [day, mo, y] = d.data.split("/");
-          seriesByYM[`${y}-${mo}`] = d.valor;
-        }
-        const aligned = s.months.map((m,i) => ({ rec: s.rec[i], macro: seriesByYM[m] })).filter(x => x.macro != null);
-        if (aligned.length < 3) continue;
-        out[sec][name] = _stats.corr(aligned.map(a => a.rec), aligned.map(a => a.macro));
-      }
-    }
-    return out;
-  }, [macro, setorStats]);
 
   const fmtCompactNum = (n) => window.fmtCompact ? window.fmtCompact(n) : "R$ " + Math.round(n);
   const fmtPctSig = (n, dec=1) => (n>=0?"+":"") + (n||0).toFixed(dec).replace(".",",") + "%";
@@ -888,51 +916,14 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
               })()}
             </>
           }
-          pergunta="E contra o macro? A operação se mexe junto com inflação, juros, atividade econômica?"
+          pergunta="OK, sabemos quem se hedgeia. Mas qual setor ainda absorve capital novo (em ramp-up) vs qual chegou no platô?"
         >
           <CorrSet matrix={corrInter.matrix} labels={corrInter.setores} />
         </TeseSecao>
       )}
 
-      {/* §05 — Macro */}
+      {/* §05 — Capacidade de absorção (era §06) */}
       <TeseSecao numero={5}
-        titulo="Sensibilidade macro: como cada setor reage à economia"
-        subtitulo="Correlação da receita mensal de cada setor contra séries oficiais BCB: IPCA (inflação), CDI (juros), IBC-Br (atividade econômica)."
-        insight={
-          !macro ? "Buscando dados do BCB..." :
-          macroCorr ? (() => {
-            const linhas = [];
-            for (const sec of SETORES_ORD) {
-              if (!macroCorr[sec]) continue;
-              const corrs = Object.entries(macroCorr[sec]).filter(([_,v]) => Math.abs(v) > 0.5);
-              if (corrs.length) linhas.push(<div key={sec}><b style={{color:window.colorForSetor(sec)}}>{sec}</b>: {corrs.map(([k,v]) => `${k} ${v >= 0 ? "+" : ""}${v.toFixed(2)}`).join(" · ")}</div>);
-            }
-            return linhas.length ? <>{linhas}<div style={{marginTop:8, fontSize:13}}>Correlações fortes (|ρ| &gt; 0,5) sinalizam exposição macro. Setor sem correlação forte é "barco a vela próprio" — bom em períodos de macro hostil.</div></> : "Nenhum setor mostra correlação macro forte (|ρ| > 0,5). Operação é relativamente independente do ciclo econômico — bom em períodos de stress.";
-          })() : "Sem dados macro disponíveis."
-        }
-        pergunta="OK, sabemos performance histórica. Mas qual setor ainda absorve capital novo (em ramp-up) vs qual chegou no platô?"
-      >
-        {macroCorr && (
-          <div className="t-scroll" style={{ overflowX: "auto" }}>
-            <table className="t">
-              <thead><tr><th>Setor</th><th className="num">IPCA</th><th className="num">CDI</th><th className="num">IBC-Br</th></tr></thead>
-              <tbody>
-                {SETORES_ORD.filter(s => macroCorr[s]).map(sec => (
-                  <tr key={sec}>
-                    <td><b style={{color:window.colorForSetor(sec)}}>● {sec}</b></td>
-                    <td className="num">{macroCorr[sec].IPCA?.toFixed(2) || "—"}</td>
-                    <td className="num">{macroCorr[sec].CDI?.toFixed(2) || "—"}</td>
-                    <td className="num">{macroCorr[sec]["IBC-Br"]?.toFixed(2) || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </TeseSecao>
-
-      {/* §06 — Capacidade de absorção */}
-      <TeseSecao numero={6}
         titulo="Capacidade de absorção: quem ainda tem espaço pra crescer"
         subtitulo="Razão entre receita do último terço × primeiro terço dos meses. >1.3 = ainda em ramp · 0.7-1.3 = maduro · <0.7 = decaindo."
         insight={
@@ -971,82 +962,92 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
         </div>
       </TeseSecao>
 
-      {/* §07 — Forecast Monte Carlo flashy */}
-      <TeseSecao numero={7}
+      {/* §06 — Forecast Monte Carlo */}
+      <TeseSecao numero={6}
         titulo="Monte Carlo: 500 futuros possíveis"
-        subtitulo="Cada linha cinza é uma simulação completa do próximo ano (trend + sazonalidade + ruído). Ao centro, a mediana. Banda colorida = P25–P75 (50% mais prováveis). Banda extendida = P5–P95 (90%)."
+        subtitulo="Cada linha é uma simulação do próximo ano. Receita varia (trend + sazonal + ruído); despesa varia também (componente variável escala c/ receita + custo fixo c/ ruído próprio). A distribuição revela a sua incerteza honesta sobre lucro/prejuízo."
         insight={
           forecastGrupo ? (
             <>
-              Receita do grupo nos próximos 12 meses (mediana): <b>{fmtCompactNum(forecastGrupo.p50)}</b>. Banda 50%: [<b>{fmtCompactNum(forecastGrupo.p25)}</b> ; <b>{fmtCompactNum(forecastGrupo.p75)}</b>]. Banda 90%: [<b>{fmtCompactNum(forecastGrupo.p05)}</b> ; <b>{fmtCompactNum(forecastGrupo.p95)}</b>]. A largura da banda é a sua incerteza honesta — quanto mais larga, menos confiança em qualquer ponto único.
+              <b>Receita do grupo</b> 12m (mediana): <b>{fmtCompactNum(forecastGrupo.p50)}</b> · Banda 90%: [{fmtCompactNum(forecastGrupo.p05)} ; {fmtCompactNum(forecastGrupo.p95)}].<br/>
+              <b style={{color: forecastGrupo.liq_p50 >= 0 ? "var(--green)" : "var(--red)"}}>Líquido projetado</b> 12m (mediana): <b style={{color: forecastGrupo.liq_p50 >= 0 ? "var(--green)" : "var(--red)"}}>{fmtCompactNum(forecastGrupo.liq_p50)}</b> · Banda 90%: [{fmtCompactNum(forecastGrupo.liq_p05)} ; {fmtCompactNum(forecastGrupo.liq_p95)}].<br/>
+              <b>Probabilidade do grupo fechar 12m no positivo: <span style={{color: forecastGrupo.probLiqPositivo > 60 ? "var(--green)" : forecastGrupo.probLiqPositivo > 30 ? "var(--amber)" : "var(--red)"}}>{forecastGrupo.probLiqPositivo.toFixed(0)}%</span></b>.
             </>
           ) : "Sem simulação disponível."
         }
-        pergunta="Esses 500 futuros se sintetizam em decisões que importam: que lojas fechar, em quais investir. A próxima seção responde nominalmente."
+        pergunta="Esses 500 futuros se sintetizam em decisões nominais. A próxima seção responde: vender quem, ordenhar quem, investir em quem."
       >
         {forecastGrupo && (
           <>
             <h3 style={{ fontSize: 13, color: "var(--cyan)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginTop: 4, marginBottom: 8 }}>
-              GRUPO consolidado · receita mensal projetada
+              GRUPO · receita mensal projetada
+            </h3>
+            <SpaghettiFanChart forecast={forecastGrupo} color="var(--cyan)" height={260} />
+
+            <h3 style={{ fontSize: 13, color: forecastGrupo.liq_p50 >= 0 ? "var(--green)" : "var(--red)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginTop: 28, marginBottom: 8 }}>
+              GRUPO · LÍQUIDO mensal projetado (após despesa variável + fixa)
             </h3>
             <SpaghettiFanChart
-              forecast={forecastGrupo}
-              color="var(--cyan)"
-              height={280}
+              forecast={{
+                byMonth: forecastGrupo.byMonthLiq,
+                trajs: forecastGrupo.trajsLiq,
+                lastValue: null,
+              }}
+              color={forecastGrupo.liq_p50 >= 0 ? "var(--green)" : "var(--red)"}
+              height={260}
             />
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 24 }}>
               <div>
                 <h3 style={{ fontSize: 13, color: "var(--cyan)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 }}>
-                  Distribuição da receita anual projetada
+                  Distribuição RECEITA anual
                 </h3>
-                <HistogramChart values={forecastGrupo.annual} height={200} />
+                <HistogramChart values={forecastGrupo.annual} height={200} color="var(--cyan)" />
               </div>
               <div>
-                <h3 style={{ fontSize: 13, color: "var(--cyan)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 }}>
-                  Quantis da receita anual
+                <h3 style={{ fontSize: 13, color: forecastGrupo.liq_p50 >= 0 ? "var(--green)" : "var(--red)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 }}>
+                  Distribuição LÍQUIDO anual · {forecastGrupo.probLiqPositivo.toFixed(0)}% prob &gt; 0
                 </h3>
-                <div style={{ background: "var(--bg)", borderRadius: 8, padding: 16, border: "1px solid var(--border)" }}>
-                  {[
-                    { lbl: "Cenário pessimista (P5)", v: forecastGrupo.p05, c: "var(--red)" },
-                    { lbl: "Pessimista moderado (P25)", v: forecastGrupo.p25, c: "var(--amber)" },
-                    { lbl: "Mediana (P50)", v: forecastGrupo.p50, c: "var(--cyan)", bold: true },
-                    { lbl: "Otimista moderado (P75)", v: forecastGrupo.p75, c: "var(--green)" },
-                    { lbl: "Cenário otimista (P95)", v: forecastGrupo.p95, c: "var(--green)" },
-                  ].map((r,i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 4 ? "1px solid var(--border)" : "none" }}>
-                      <span style={{ color: "var(--fg-2)", fontSize: 13 }}>{r.lbl}</span>
-                      <span style={{ color: r.c, fontWeight: r.bold ? 800 : 600, fontSize: r.bold ? 16 : 13 }}>{fmtCompactNum(r.v)}</span>
-                    </div>
-                  ))}
-                </div>
+                <HistogramChart values={forecastGrupo.annualLiq} height={200} color={forecastGrupo.liq_p50 >= 0 ? "var(--green)" : "var(--red)"} />
               </div>
             </div>
+
             <h3 style={{ fontSize: 13, color: "var(--fg-2)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginTop: 32, marginBottom: 12 }}>
-              Por setor — cada um com sua própria assinatura de risco
+              Por setor — cada setor com sua assinatura de risco e probabilidade de positivar
             </h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
-              {SETORES_ORD.filter(s => forecastSetor[s]).map(sec => (
-                <div key={sec} style={{ background: "var(--bg)", borderRadius: 8, padding: 12, border: "1px solid var(--border)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                    <b style={{ color: window.colorForSetor(sec), fontSize: 13 }}>● {sec}</b>
-                    <span style={{ fontSize: 11, color: "var(--fg-3)" }}>P50 anual: <b style={{ color: "var(--cyan)" }}>{fmtCompactNum(forecastSetor[sec].p50)}</b></span>
+              {SETORES_ORD.filter(s => forecastSetor[s]).map(sec => {
+                const fs = forecastSetor[sec];
+                return (
+                  <div key={sec} style={{ background: "var(--bg)", borderRadius: 8, padding: 12, border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                      <b style={{ color: window.colorForSetor(sec), fontSize: 13 }}>● {sec}</b>
+                      <span style={{ fontSize: 11, color: "var(--fg-3)" }}>
+                        Líq P50 <b style={{ color: fs.liq_p50 >= 0 ? "var(--green)" : "var(--red)" }}>{fmtCompactNum(fs.liq_p50)}</b>
+                      </span>
+                    </div>
+                    <SpaghettiFanChart
+                      forecast={{ byMonth: fs.byMonthLiq, trajs: fs.trajsLiq, lastValue: fs.lastLiq }}
+                      color={fs.liq_p50 >= 0 ? "var(--green)" : "var(--red)"}
+                      height={150}
+                      compact
+                    />
+                    <div style={{ fontSize: 11, marginTop: 6, color: "var(--fg-2)" }}>
+                      Prob &gt; 0: <b style={{ color: fs.probLiqPositivo > 60 ? "var(--green)" : fs.probLiqPositivo > 30 ? "var(--amber)" : "var(--red)" }}>{fs.probLiqPositivo.toFixed(0)}%</b>
+                      <span style={{ marginLeft: 10 }}>· Custo var/rec: {(fs.ratioVarMean*100).toFixed(0)}%</span>
+                      <span style={{ marginLeft: 10 }}>· Fixo/mês: {fmtCompactNum(fs.custoFixoMean)}</span>
+                    </div>
                   </div>
-                  <SpaghettiFanChart
-                    forecast={forecastSetor[sec]}
-                    color={window.colorForSetor(sec)}
-                    height={150}
-                    compact
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
       </TeseSecao>
 
-      {/* §08 — VEREDITO NOMINAL */}
+      {/* §07 — VEREDITO NOMINAL */}
       <div className="card" style={{ marginBottom: 24, padding: 32, border: "2px solid var(--cyan)", background: "linear-gradient(135deg, rgba(34,211,238,0.06), transparent)" }}>
-        <div style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.3em", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>§08 · DECISÃO</div>
+        <div style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.3em", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>§07 · DECISÃO</div>
         <h2 style={{ fontSize: 28, fontWeight: 800, margin: "8px 0 8px" }}>Vender, ordenhar ou expandir: 3 destinos</h2>
         <p style={{ color: "var(--fg-2)", fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
           Cada loja entra em UMA categoria (mutuamente exclusivas, decididas pelo maior score). Critérios: margem, Sharpe (líquido/σ), significância do crescimento, ramp t3/t1, estabilidade.

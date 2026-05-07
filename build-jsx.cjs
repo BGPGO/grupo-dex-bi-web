@@ -32,6 +32,7 @@ const SOURCES = [
   'page-stress.jsx',
   'page-bridge.jsx',
   'page-tese.jsx',
+  'page-fixovar.jsx',
   'upsell-pages.jsx',
 ];
 
@@ -88,6 +89,7 @@ const PAGE_MODE_INJECT = `\n// Injetado por build-jsx.cjs a partir de bi.config.
     stress: '16 Stress Test',
     bridge: '17 Margin Bridge',
     tese: '18 Tese Estatística',
+    fixovar: '19 Fixo × Variável',
     faturamento_produto: '18 Faturamento por Produto',
     curva_abc: '19 Curva ABC',
     marketing: '20 Marketing ADS',
@@ -230,6 +232,7 @@ const PAGE_MODE_INJECT = `\n// Injetado por build-jsx.cjs a partir de bi.config.
       stress: PageStress,
       bridge: PageBridge,
       tese: PageTese,
+      fixovar: PageFixoVar,
       relatorio: PageRelatorio,
       faturamento_produto: PageFaturamentoProduto,
       curva_abc: PageCurvaABC,

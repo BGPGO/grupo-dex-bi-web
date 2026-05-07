@@ -46,6 +46,7 @@ module.exports = {
       stress: "active",                // stress test sliders
       bridge: "active",                // P&L waterfall
       tese: "active",                  // Ensaio estatístico vertical (Buffett+Simons+Jobs)
+      fixovar: "active",               // Fixo × Variável + break-even por loja
       indicators: "hidden",            // sem acesso = oculto
       faturamento_produto: "hidden",
       curva_abc: "hidden",
