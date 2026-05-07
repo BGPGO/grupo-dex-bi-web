@@ -809,7 +809,7 @@ const PctSlider = ({ label, value, onChange, min = 0, max = 100, step = 0.5 }) =
   );
 };
 
-const PageValuation = () => {
+const PageValuation = ({ statusFilter, drilldown, setDrilldown, year, month } = {}) => {
   const B = window.BIT || {};
   const REF_YEAR = window.REF_YEAR || new Date().getFullYear();
   const fmt = B.fmt || ((n) => "R$ " + formatBR(n || 0));
@@ -830,10 +830,16 @@ const PageValuation = () => {
     saveValuationPremissas({ ...VALUATION_DEFAULTS });
   };
 
-  // ----- Inputs derivados de window.BIT (DRE estrutural igual fin40) -----
-  // MONTH_DRE: 12 meses com receita/custo/despesa/imposto/liquido segregados.
-  const DRE = Array.isArray(B.MONTH_DRE) ? B.MONTH_DRE : [];
-  const ORC = B.ORCAMENTO || {};
+  // ----- Filtro de empresa: usa DRE_BY_CONTA pre-computado (split completo) -----
+  const isContaFilter = drilldown && drilldown.type === 'conta';
+  const contaLabel = isContaFilter ? drilldown.label : null;
+  const { DRE, ORC } = useMemo(() => {
+    if (isContaFilter && B.DRE_BY_CONTA && B.DRE_BY_CONTA[drilldown.value]) {
+      const d = B.DRE_BY_CONTA[drilldown.value];
+      return { DRE: d.MONTH_DRE || [], ORC: d.ORCAMENTO || {} };
+    }
+    return { DRE: Array.isArray(B.MONTH_DRE) ? B.MONTH_DRE : [], ORC: B.ORCAMENTO || {} };
+  }, [isContaFilter, drilldown, B.MONTH_DRE, B.ORCAMENTO, B.DRE_BY_CONTA]);
   const monthsRealized = DRE.filter(m => m.count > 0).length;
   const monthsRemaining = Math.max(0, 12 - monthsRealized);
   const totalRecYTD = DRE.reduce((s, m) => s + (m.receita || 0), 0);
@@ -932,9 +938,10 @@ const PageValuation = () => {
     <div className="page">
       <div className="report-toolbar no-print" style={{ flexWrap: "wrap", minWidth: 0 }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ margin: 0 }}>Valuation — Fluxo de Caixa Descontado</h1>
+          <h1 style={{ margin: 0 }}>Valuation — DCF{contaLabel ? ` · ${contaLabel}` : " · Consolidado"}</h1>
           <div className="status-line">
-            Projecao de 5 anos · YTD {monthCount} {monthCount === 1 ? "mes" : "meses"} de {REF_YEAR} · WACC {premissas.wacc}% · g {premissas.perpetuity_growth}%
+            Projeção 3 anos · YTD {monthCount} {monthCount === 1 ? "mês" : "meses"} de {REF_YEAR} · WACC {premissas.wacc}% · g {premissas.perpetuity_growth}%
+            {isContaFilter && monthsRealized === 0 && <span style={{ color: "var(--amber)", marginLeft: 8 }}> · Esta empresa não tem caixa realizado em {REF_YEAR}.</span>}
           </div>
         </div>
         <div className="actions" style={{ gap: 12, alignItems: 'center' }}>
@@ -944,6 +951,8 @@ const PageValuation = () => {
           </button>
         </div>
       </div>
+
+      {setDrilldown && drilldown && <DrilldownBadge drilldown={drilldown} onClear={() => setDrilldown(null)} />}
 
       {/* ============ Premissas editaveis ============ */}
       <div className="card" style={{ minWidth: 0 }}>
