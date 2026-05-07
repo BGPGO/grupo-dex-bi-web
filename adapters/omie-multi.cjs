@@ -202,7 +202,15 @@ async function pullConta(conta, dataDir) {
   const cliR = await fetchAllPaginated('/geral/clientes/', 'ListarClientes', {}, 'clientes_cadastro', path.join(cacheBase, 'clientes')).catch(() => ({ records: [] }));
   const ccR = await fetchAllPaginated('/geral/contacorrente/', 'ListarContasCorrentes', {}, 'ListarContasCorrentes', path.join(cacheBase, 'contas_correntes')).catch(() => ({ records: [] }));
   const movR = await fetchAllPaginated(
-    '/financas/mf/', 'ListarMovimentos', { cExibirDepartamentos: 'S' }, 'movimentos',
+    '/financas/mf/', 'ListarMovimentos',
+    {
+      cExibirDepartamentos: 'S',
+      // Sem filtro de data, Omie retorna só janela limitada (~mês corrente).
+      // Forçando range 2020-2030 garantimos histórico completo.
+      dDtVencDe: '01/01/2020',
+      dDtVencAte: '31/12/2030',
+    },
+    'movimentos',
     path.join(cacheBase, 'movimentos'), { style: 'camel' }
   ).catch((e) => { return { records: [], _err: e.message }; });
 

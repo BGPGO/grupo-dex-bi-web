@@ -1,36 +1,36 @@
 {
   "empresa": "Grupo DEX",
-  "periodo": "Janeiro a abril 2026 (YTD)",
-  "generated_at": "2026-05-05T19:03:11.523Z",
+  "periodo": "Janeiro a maio 2026 (YTD)",
+  "generated_at": "2026-05-07T18:46:42.242Z",
   "tipo": "preliminar",
   "secoes": {
     "visao_geral": {
       "title": "Visão Geral",
-      "analysis": "O período de 4 meses de 2026 consolidado das 24 empresas do Grupo DEX fechou com receita realizada de R$ 2.623.631 e despesa total (custo + despesa + imposto) de R$ 3.661.775, resultando em prejuízo líquido de R$ -1.038.144 — margem de -39,6%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (janeiro, R$ 1.208.461) projeta líquido mensal de R$ 293.017 — anualizando para R$ 3.516.208. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ 1.305.995, cenário positivo caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "O período de 5 meses de 2026 consolidado das 24 empresas do Grupo DEX fechou com receita realizada de R$ 5.940.846 e despesa total (custo + despesa + imposto) de R$ 13.624.847, resultando em prejuízo líquido de R$ -7.684.000 — margem de -129,3%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (fevereiro, R$ 1.931.799) projeta líquido mensal de R$ -793.170 — anualizando para R$ -9.518.043. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ -13.236.192, cenário de atenção caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     },
     "receita": {
       "title": "Receita",
-      "analysis": "Receita realizada YTD: R$ 2.623.631. As principais categorias de entrada são Receita de Vendas (R$ 2.623.124), Rendimentos de Aplicações (R$ 452), Receitas de Serviços (R$ 55).\n\nA carteira a receber está em R$ 43.399 — ciclo de recebimento curto, característico de operação com forte componente cartão/PIX. O orçamento mensal de receita é R$ 1.208.461, baseado no mês mais forte do histórico realizado."
+      "analysis": "Receita realizada YTD: R$ 5.940.846. As principais categorias de entrada são Receita de Vendas (R$ 5.825.653), Empréstimos Bancários (R$ 100.000), &lt;Disponível&gt; (R$ 12.661).\n\nA carteira a receber está em R$ 114.749 — ciclo de recebimento curto, característico de operação com forte componente cartão/PIX. O orçamento mensal de receita é R$ 1.931.799, baseado no mês mais forte do histórico realizado."
     },
     "despesa": {
       "title": "Despesa",
-      "analysis": "O total de saídas foi R$ 3.661.775, decomposto em: custo variável R$ 1.717.964 (65% da receita), despesa operacional R$ 1.735.643 (66% da receita) e impostos R$ 208.169 (8% da receita).\n\nTop 3 categorias de despesa: Compras de Mercadorias (R$ 1.166.074), Aluguel fixo (R$ 387.362), &lt;Disponível&gt; (R$ 386.872). O passivo total a pagar (a vencer + atrasado) é R$ 11.475.696 — volume crítico que requer gestão ativa de aging por loja."
+      "analysis": "O total de saídas foi R$ 13.624.847, decomposto em: custo variável R$ 6.741.588 (113% da receita), despesa operacional R$ 6.402.665 (108% da receita) e impostos R$ 480.594 (8% da receita).\n\nTop 3 categorias de despesa: Compras de Mercadorias (R$ 4.799.019), Aluguel fixo (R$ 1.533.471), Custo com Serviços de Entrega (R$ 762.788). O passivo total a pagar (a vencer + atrasado) é R$ 12.486.890 — volume crítico que requer gestão ativa de aging por loja."
     },
     "fluxo_caixa": {
       "title": "Fluxo de Caixa",
-      "analysis": "O fluxo mensal mostra: janeiro R$ -304.837 · fevereiro R$ -301.379 · março R$ -253.274 · abril R$ -178.654. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 8 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ 1.305.995."
+      "analysis": "O fluxo mensal mostra: janeiro R$ -1.972.437 · fevereiro R$ -1.173.701 · março R$ -1.887.963 · abril R$ -2.156.183 · maio R$ -493.716. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 7 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ -13.236.192."
     },
     "tesouraria": {
       "title": "Tesouraria",
-      "analysis": "Posição de tesouraria: R$ 43.399 a receber vs R$ 11.475.696 a pagar. Razão: 264× mais obrigações que recebíveis previstos.\n\nRecomendação: classificar obrigações por urgência de vencimento, identificar credores estratégicos e renegociar prazos onde possível. Para operações com ciclo de caixa apertado, manter linha de crédito pré-aprovada de pelo menos 1.5× a despesa mensal média (~R$ 650.866)."
+      "analysis": "Posição de tesouraria: R$ 114.749 a receber vs R$ 12.486.890 a pagar. Razão: 109× mais obrigações que recebíveis previstos.\n\nRecomendação: classificar obrigações por urgência de vencimento, identificar credores estratégicos e renegociar prazos onde possível. Para operações com ciclo de caixa apertado, manter linha de crédito pré-aprovada de pelo menos 1.5× a despesa mensal média (~R$ 1.920.799)."
     },
     "comparativo": {
       "title": "Comparativo",
-      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 655.908 vs orçada R$ 1.208.461 (-45,7% de variação). Líquido médio realizado R$ -259.536 vs orçado R$ 293.017.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
+      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 1.188.169 vs orçada R$ 1.931.799 (-38,5% de variação). Líquido médio realizado R$ -1.536.800 vs orçado R$ -793.170.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
     },
     "conclusao": {
       "title": "Conclusão e Recomendações",
-      "analysis": "Resumo do período: prejuízo de R$ 1.038.144, margem de -39,6%, projeção de fechamento R$ 1.305.995.\n\n3 ações prioritárias:\n\n1. Diagnóstico loja-a-loja imediato: usar Painel de Lojas + Risco & Concentração para identificar quais empresas concentram o prejuízo. A hipótese é que poucas lojas explicam a maior parte da deterioração — fechamento ou turnaround focado nessas pode reverter a tendência em 60-90 dias.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 11.475.696: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "Resumo do período: prejuízo de R$ 7.684.000, margem de -129,3%, projeção de fechamento R$ -13.236.192.\n\n3 ações prioritárias:\n\n1. Diagnóstico loja-a-loja imediato: usar Painel de Lojas + Risco & Concentração para identificar quais empresas concentram o prejuízo. A hipótese é que poucas lojas explicam a maior parte da deterioração — fechamento ou turnaround focado nessas pode reverter a tendência em 60-90 dias.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 12.486.890: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     }
   }
 }
