@@ -420,36 +420,64 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
     }).filter(Boolean);
   }, [CONTAS, ALL_TX, lojaSetor]);
 
-  // ===== Vereditos: ranking nominal =====
+  // ===== Vereditos: 3 categorias mutuamente exclusivas =====
+  //   VENDER: prejuízo + queda + Sharpe ruim
+  //   VACA LEITEIRA: lucrativa + estável (slope baixo) + Sharpe positivo
+  //   INVESTIR: lucrativa + crescendo + ramp positivo
   const vereditos = useMemo(() => {
-    if (!lojaStats.length) return { vender: [], investir: [] };
-    // Score VENDA: alto = más
-    //   slope_significativamente_negativo: +30
-    //   margem < 0: + (margem/-1) (até 30)
-    //   sharpe < 0: + (-sharpe * 10, max 20)
-    //   ramp < 0.7: +20
-    // Score INVESTIR: alto = bom
-    //   slope_significativamente_positivo: +30
-    //   margem positiva alta: + (margem * 1)
-    //   sharpe > 0.5: + (sharpe * 10, max 30)
-    //   ramp > 1.3: +20
+    if (!lojaStats.length) return { vender: [], vacas: [], investir: [] };
     const enriched = lojaStats.map(p => {
-      let scV = 0, scI = 0;
+      let scV = 0, scI = 0, scK = 0;
+      // === VENDER ===
       if (p.significant && p.slopePct < 0) scV += 30;
-      if (p.significant && p.slopePct > 0) scI += 30;
       if (p.margem < 0) scV += Math.min(30, -p.margem);
-      if (p.margem > 0) scI += Math.min(30, p.margem);
       if (p.sharpe < 0) scV += Math.min(20, -p.sharpe * 10);
-      if (p.sharpe > 0.3) scI += Math.min(30, p.sharpe * 10);
       if (p.ramp < 0.7) scV += 20;
+      if (p.cv > 0.5) scV += 5;
+
+      // === INVESTIR (Estrela: cresce + lucrativa) ===
+      if (p.significant && p.slopePct > 5) scI += 30;
+      if (p.margem > 5) scI += Math.min(30, p.margem);
+      if (p.sharpe > 0.3) scI += Math.min(30, p.sharpe * 10);
       if (p.ramp > 1.3) scI += 20;
-      // CV alto pune ambos
-      if (p.cv > 0.5) { scV += 5; scI -= 5; }
-      return { ...p, scoreVender: scV, scoreInvestir: scI };
+      if (p.cv > 0.5) scI -= 5;
+
+      // === VACA LEITEIRA (Cash Cow: lucra mas cresce pouco) ===
+      // - margem > 5 (saudável)
+      // - sharpe > 0.3 (consistência)
+      // - slope baixo absoluto (|slope| < 5%) — não cresce nem cai significativamente
+      // - ramp próximo de 1 (estabilidade) — entre 0.85 e 1.15
+      if (p.margem > 5) scK += Math.min(30, p.margem);
+      if (p.sharpe > 0.3) scK += Math.min(20, p.sharpe * 10);
+      if (Math.abs(p.slopePct) < 5) scK += 20;     // estável
+      if (p.ramp >= 0.85 && p.ramp <= 1.15) scK += 15;  // não acelera nem cai
+      // Bônus se IC do slope contém zero (genuinamente estável)
+      if (!p.significant && p.margem > 0) scK += 10;
+      // Penalidade se está em queda significativa
+      if (p.significant && p.slopePct < 0) scK -= 30;
+      if (p.margem < 0) scK -= 50;
+
+      return { ...p, scoreVender: scV, scoreInvestir: scI, scoreVaca: scK };
     });
+
+    // Atribuição mutuamente exclusiva: cada loja entra na categoria de MAIOR score
+    // (com mínimos de qualificação)
+    const candidates = enriched.map(p => {
+      const max = Math.max(p.scoreVender, p.scoreInvestir, p.scoreVaca);
+      let cat = null;
+      if (p.scoreVender >= 30 && p.scoreVender === max) cat = "vender";
+      else if (p.scoreInvestir >= 25 && p.scoreInvestir === max) cat = "investir";
+      else if (p.scoreVaca >= 35 && p.scoreVaca === max) cat = "vaca";
+      return { ...p, _cat: cat };
+    });
+
     return {
-      vender: enriched.slice().sort((a,b) => b.scoreVender - a.scoreVender).filter(p => p.scoreVender >= 30).slice(0, 6),
-      investir: enriched.slice().sort((a,b) => b.scoreInvestir - a.scoreInvestir).filter(p => p.scoreInvestir >= 25).slice(0, 6),
+      vender: candidates.filter(p => p._cat === "vender")
+        .sort((a,b) => b.scoreVender - a.scoreVender).slice(0, 6),
+      vacas: candidates.filter(p => p._cat === "vaca")
+        .sort((a,b) => b.scoreVaca - a.scoreVaca).slice(0, 6),
+      investir: candidates.filter(p => p._cat === "investir")
+        .sort((a,b) => b.scoreInvestir - a.scoreInvestir).slice(0, 6),
     };
   }, [lojaStats]);
 
@@ -1018,34 +1046,35 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
       {/* §08 — VEREDITO NOMINAL */}
       <div className="card" style={{ marginBottom: 24, padding: 32, border: "2px solid var(--cyan)", background: "linear-gradient(135deg, rgba(34,211,238,0.06), transparent)" }}>
         <div style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.3em", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>§08 · DECISÃO</div>
-        <h2 style={{ fontSize: 28, fontWeight: 800, margin: "8px 0 8px" }}>Vender ou investir: lista nominal</h2>
+        <h2 style={{ fontSize: 28, fontWeight: 800, margin: "8px 0 8px" }}>Vender, ordenhar ou expandir: 3 destinos</h2>
         <p style={{ color: "var(--fg-2)", fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
-          Score combinando 4 critérios: significância do crescimento, margem, Sharpe (líquido/σ) e ramp t3/t1. Score &ge; 30 entra no ranking.
+          Cada loja entra em UMA categoria (mutuamente exclusivas, decididas pelo maior score). Critérios: margem, Sharpe (líquido/σ), significância do crescimento, ramp t3/t1, estabilidade.
         </p>
 
-        <div className="row" style={{ gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <div className="row" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+          {/* VENDER */}
           <div>
-            <h3 style={{ color: "var(--red)", marginBottom: 12, fontSize: 16 }}>🔻 VENDER / FECHAR ({vereditos.vender.length})</h3>
+            <h3 style={{ color: "var(--red)", marginBottom: 12, fontSize: 15 }}>🔻 VENDER / FECHAR ({vereditos.vender.length})</h3>
+            <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 12, lineHeight: 1.5 }}>
+              Margem negativa, queda significativa, Sharpe ruim, decaindo. <b>Cada R$ retirado vira R$ disponível.</b>
+            </div>
             {vereditos.vender.length === 0 ? (
-              <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Nenhuma loja se qualifica claramente para venda.</div>
+              <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Nenhuma loja se qualifica.</div>
             ) : (
-              <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ display: "grid", gap: 10 }}>
                 {vereditos.vender.map((p,i) => {
                   const motivos = [];
-                  if (p.significant && p.slopePct < 0) motivos.push(`queda significativa ${fmtPctSig(p.slopePct)}/mês`);
-                  if (p.margem < 0) motivos.push(`margem negativa ${p.margem.toFixed(1).replace(".",",")}%`);
-                  if (p.sharpe < 0) motivos.push(`Sharpe negativo ${p.sharpe.toFixed(2)}`);
-                  if (p.ramp < 0.7) motivos.push(`decaindo (t3/t1 ${p.ramp.toFixed(2)}×)`);
-                  if (p.cv > 0.5) motivos.push(`muito volátil (CV ${(p.cv*100).toFixed(0)}%)`);
+                  if (p.significant && p.slopePct < 0) motivos.push(`↓ ${fmtPctSig(p.slopePct)}/mês`);
+                  if (p.margem < 0) motivos.push(`margem ${p.margem.toFixed(0).replace(".",",")}%`);
+                  if (p.sharpe < 0) motivos.push(`Sharpe ${p.sharpe.toFixed(2)}`);
+                  if (p.ramp < 0.7) motivos.push(`decaindo ${p.ramp.toFixed(2)}×`);
                   return (
-                    <div key={p.slug} style={{ padding: 12, background: "rgba(239,68,68,0.06)", borderLeft: "3px solid var(--red)", borderRadius: 6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-                        <div><b>{i+1}. {p.label}</b><div style={{fontSize:10, color:"var(--fg-3)"}}>{p.setor}</div></div>
-                        <div style={{ fontSize: 13, color: "var(--red)", fontWeight: 700 }}>score {p.scoreVender.toFixed(0)}</div>
+                    <div key={p.slug} style={{ padding: 10, background: "rgba(239,68,68,0.06)", borderLeft: "3px solid var(--red)", borderRadius: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                        <div><b style={{fontSize:13}}>{i+1}. {p.label}</b><div style={{fontSize:10, color:"var(--fg-3)"}}>{p.setor}</div></div>
+                        <div style={{ fontSize: 12, color: "var(--red)", fontWeight: 700 }}>{p.scoreVender.toFixed(0)}</div>
                       </div>
-                      <ul style={{ marginTop: 6, marginLeft: 16, fontSize: 12, color: "var(--fg-2)" }}>
-                        {motivos.map((m,j) => <li key={j}>{m}</li>)}
-                      </ul>
+                      <div style={{ marginTop: 4, fontSize: 11, color: "var(--fg-2)" }}>{motivos.join(" · ")}</div>
                     </div>
                   );
                 })}
@@ -1053,27 +1082,59 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
             )}
           </div>
 
+          {/* VACA LEITEIRA */}
           <div>
-            <h3 style={{ color: "var(--green)", marginBottom: 12, fontSize: 16 }}>🚀 INVESTIR / EXPANDIR ({vereditos.investir.length})</h3>
-            {vereditos.investir.length === 0 ? (
-              <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Nenhuma loja se qualifica claramente para investimento.</div>
+            <h3 style={{ color: "var(--cyan)", marginBottom: 12, fontSize: 15 }}>🐄 VACA LEITEIRA ({vereditos.vacas.length})</h3>
+            <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 12, lineHeight: 1.5 }}>
+              Lucra todo mês, estável, baixo crescimento. <b>Não recebe capex de expansão — distribui caixa pra holding.</b>
+            </div>
+            {vereditos.vacas.length === 0 ? (
+              <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Nenhuma loja se qualifica como cash cow consistente.</div>
             ) : (
-              <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ display: "grid", gap: 10 }}>
+                {vereditos.vacas.map((p,i) => {
+                  const motivos = [];
+                  if (p.margem > 5) motivos.push(`margem ${p.margem.toFixed(0)}%`);
+                  if (p.sharpe > 0.3) motivos.push(`Sharpe ${p.sharpe.toFixed(2)}`);
+                  if (Math.abs(p.slopePct) < 5) motivos.push(`crescimento ~0 (${fmtPctSig(p.slopePct)}/mês)`);
+                  if (p.ramp >= 0.85 && p.ramp <= 1.15) motivos.push(`estável ${p.ramp.toFixed(2)}×`);
+                  return (
+                    <div key={p.slug} style={{ padding: 10, background: "rgba(34,211,238,0.06)", borderLeft: "3px solid var(--cyan)", borderRadius: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                        <div><b style={{fontSize:13}}>{i+1}. {p.label}</b><div style={{fontSize:10, color:"var(--fg-3)"}}>{p.setor}</div></div>
+                        <div style={{ fontSize: 12, color: "var(--cyan)", fontWeight: 700 }}>{p.scoreVaca.toFixed(0)}</div>
+                      </div>
+                      <div style={{ marginTop: 4, fontSize: 11, color: "var(--fg-2)" }}>{motivos.join(" · ")}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* INVESTIR */}
+          <div>
+            <h3 style={{ color: "var(--green)", marginBottom: 12, fontSize: 15 }}>🚀 INVESTIR / EXPANDIR ({vereditos.investir.length})</h3>
+            <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 12, lineHeight: 1.5 }}>
+              Lucra E cresce E em ramp-up. <b>Recebe capital novo de expansão — multiplicador.</b>
+            </div>
+            {vereditos.investir.length === 0 ? (
+              <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Nenhuma loja se qualifica como estrela.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 10 }}>
                 {vereditos.investir.map((p,i) => {
                   const motivos = [];
-                  if (p.significant && p.slopePct > 0) motivos.push(`crescimento robusto ${fmtPctSig(p.slopePct)}/mês`);
-                  if (p.margem > 5) motivos.push(`margem de ${p.margem.toFixed(1).replace(".",",")}%`);
-                  if (p.sharpe > 0.3) motivos.push(`Sharpe ${p.sharpe.toFixed(2)} (qualidade do líquido)`);
-                  if (p.ramp > 1.3) motivos.push(`em ramp-up (t3/t1 ${p.ramp.toFixed(2)}×)`);
+                  if (p.significant && p.slopePct > 5) motivos.push(`↑ ${fmtPctSig(p.slopePct)}/mês`);
+                  if (p.margem > 5) motivos.push(`margem ${p.margem.toFixed(0)}%`);
+                  if (p.sharpe > 0.3) motivos.push(`Sharpe ${p.sharpe.toFixed(2)}`);
+                  if (p.ramp > 1.3) motivos.push(`ramp ${p.ramp.toFixed(2)}×`);
                   return (
-                    <div key={p.slug} style={{ padding: 12, background: "rgba(16,185,129,0.06)", borderLeft: "3px solid var(--green)", borderRadius: 6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-                        <div><b>{i+1}. {p.label}</b><div style={{fontSize:10, color:"var(--fg-3)"}}>{p.setor}</div></div>
-                        <div style={{ fontSize: 13, color: "var(--green)", fontWeight: 700 }}>score {p.scoreInvestir.toFixed(0)}</div>
+                    <div key={p.slug} style={{ padding: 10, background: "rgba(16,185,129,0.06)", borderLeft: "3px solid var(--green)", borderRadius: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                        <div><b style={{fontSize:13}}>{i+1}. {p.label}</b><div style={{fontSize:10, color:"var(--fg-3)"}}>{p.setor}</div></div>
+                        <div style={{ fontSize: 12, color: "var(--green)", fontWeight: 700 }}>{p.scoreInvestir.toFixed(0)}</div>
                       </div>
-                      <ul style={{ marginTop: 6, marginLeft: 16, fontSize: 12, color: "var(--fg-2)" }}>
-                        {motivos.map((m,j) => <li key={j}>{m}</li>)}
-                      </ul>
+                      <div style={{ marginTop: 4, fontSize: 11, color: "var(--fg-2)" }}>{motivos.join(" · ")}</div>
                     </div>
                   );
                 })}
@@ -1083,7 +1144,7 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
         </div>
 
         <div style={{ marginTop: 24, padding: 16, background: "rgba(251,191,36,0.06)", borderLeft: "3px solid var(--amber)", borderRadius: 6, fontSize: 13, lineHeight: 1.6 }}>
-          <b style={{ color: "var(--amber)" }}>Tese final:</b> A oportunidade no Grupo DEX está em <b>concentrar capital no setor com crescimento robusto + ramp-up positivo</b> e <b>cortar a cauda do bottom 5</b>. Cada R$ retirado das lojas em queda é R$ liberado pra acelerar as estrelas. Sem dor, sem retorno superior.
+          <b style={{ color: "var(--amber)" }}>Tese final:</b> 3 destinos para o capital — <b style={{color:"var(--red)"}}>cortar</b> as <b>{vereditos.vender.length}</b> que destroem valor, <b style={{color:"var(--cyan)"}}>preservar</b> as <b>{vereditos.vacas.length}</b> vacas leiteiras (não invadir o caixa delas com expansão), <b style={{color:"var(--green)"}}>concentrar</b> capital novo nas <b>{vereditos.investir.length}</b> estrelas com fundamentos. Cada loja não classificada está em zona de avaliação caso-a-caso.
         </div>
       </div>
 
