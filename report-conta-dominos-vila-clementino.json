@@ -1,36 +1,36 @@
 {
   "empresa": "DOMINOS VILA CLEMENTINO",
   "periodo": "Janeiro a maio 2026",
-  "generated_at": "2026-05-07T18:46:42.301Z",
+  "generated_at": "2026-05-07T21:53:47.899Z",
   "tipo": "preliminar",
   "secoes": {
     "visao_geral": {
       "title": "Visão Geral",
-      "analysis": "O período de 5 meses de 2026 da empresa DOMINOS VILA CLEMENTINO fechou com receita realizada de R$ 893.625 e despesa total (custo + despesa + imposto) de R$ 1.045.168, resultando em prejuízo líquido de R$ -151.543 — margem de -17,0%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (abril, R$ 417.841) projeta líquido mensal de R$ 208.808 — anualizando para R$ 2.505.693. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ 1.310.111, cenário positivo caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "O período de 5 meses de 2026 da empresa DOMINOS VILA CLEMENTINO fechou com receita realizada de R$ 1.302.526 e despesa total (custo + despesa + imposto) de R$ 1.046.610, resultando em lucro líquido de R$ 255.917 — margem de +19,6%. A tendência mês a mês mostra queda consistente.\n\nO orçamento construído sobre o melhor mês de receita (abril, R$ 417.841) projeta líquido mensal de R$ 208.519 — anualizando para R$ 2.502.233. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ 1.715.553, cenário positivo caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     },
     "receita": {
       "title": "Receita",
-      "analysis": "Receita realizada YTD: R$ 893.625. Categorias detalhadas no extrato.\n\nA carteira a receber está em R$ 0 — ciclo de recebimento curto, característico de operação com forte componente cartão/PIX. O orçamento mensal de receita é R$ 417.841, baseado no mês mais forte do histórico realizado."
+      "analysis": "Receita realizada YTD: R$ 1.302.526. Categorias detalhadas no extrato.\n\nA carteira a receber está em R$ 0 — ciclo de recebimento curto, característico de operação com forte componente cartão/PIX. O orçamento mensal de receita é R$ 417.841, baseado no mês mais forte do histórico realizado."
     },
     "despesa": {
       "title": "Despesa",
-      "analysis": "O total de saídas foi R$ 1.045.168, decomposto em: custo variável R$ 468.433 (52% da receita), despesa operacional R$ 571.510 (64% da receita) e impostos R$ 5.225 (1% da receita).\n\n O passivo total a pagar (a vencer + atrasado) é R$ 0 — em linha com o ciclo da operação."
+      "analysis": "O total de saídas foi R$ 1.046.610, decomposto em: custo variável R$ 468.433 (36% da receita), despesa operacional R$ 571.716 (44% da receita) e impostos R$ 6.461 (0% da receita).\n\n O passivo total a pagar (a vencer + atrasado) é R$ 0 — em linha com o ciclo da operação."
     },
     "fluxo_caixa": {
       "title": "Fluxo de Caixa",
-      "analysis": "O fluxo mensal mostra: janeiro R$ -214.367 · fevereiro R$ -144.988 · março R$ 130.989 · abril R$ 129.215 · maio R$ -52.392. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 7 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ 1.310.111."
+      "analysis": "O fluxo mensal mostra: janeiro R$ 170.740 · fevereiro R$ -145.531 · março R$ 153.885 · abril R$ 129.215 · maio R$ -52.392. A tendência é de queda — receita não está sendo compensada por redução proporcional de gastos.\n\nProjetando os 7 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ 1.715.553."
     },
     "tesouraria": {
       "title": "Tesouraria",
-      "analysis": "Posição de tesouraria: R$ 0 a receber vs R$ 0 a pagar. Razão: —× mais obrigações que recebíveis previstos.\n\nRecomendação: classificar obrigações por urgência de vencimento, identificar credores estratégicos e renegociar prazos onde possível. Para operações com ciclo de caixa apertado, manter linha de crédito pré-aprovada de pelo menos 1.5× a despesa mensal média (~R$ 171.453)."
+      "analysis": "Posição de tesouraria: R$ 0 a receber vs R$ 0 a pagar. Razão: —× mais obrigações que recebíveis previstos.\n\nRecomendação: classificar obrigações por urgência de vencimento, identificar credores estratégicos e renegociar prazos onde possível. Para operações com ciclo de caixa apertado, manter linha de crédito pré-aprovada de pelo menos 1.5× a despesa mensal média (~R$ 171.515)."
     },
     "comparativo": {
       "title": "Comparativo",
-      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 178.725 vs orçada R$ 417.841 (-57,2% de variação). Líquido médio realizado R$ -30.309 vs orçado R$ 208.808.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
+      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 260.505 vs orçada R$ 417.841 (-37,7% de variação). Líquido médio realizado R$ 51.183 vs orçado R$ 208.519.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
     },
     "conclusao": {
       "title": "Conclusão e Recomendações",
-      "analysis": "Resumo do período: prejuízo de R$ 151.543, margem de -17,0%, projeção de fechamento R$ 1.310.111.\n\n3 ações prioritárias:\n\n1. Comparar performance desta empresa com a média do grupo no Painel de Lojas — identificar se está no top ou bottom quartile.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 0: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "Resumo do período: operação no positivo, margem de +19,6%, projeção de fechamento R$ 1.715.553.\n\n3 ações prioritárias:\n\n1. Comparar performance desta empresa com a média do grupo no Painel de Lojas — identificar se está no top ou bottom quartile.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 0: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     }
   }
 }

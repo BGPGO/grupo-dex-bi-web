@@ -1,24 +1,24 @@
 {
   "empresa": "BOLO DE ROLO AEROPORTO VIX",
   "periodo": "Janeiro a abril 2026",
-  "generated_at": "2026-05-07T18:46:42.283Z",
+  "generated_at": "2026-05-07T21:53:47.885Z",
   "tipo": "preliminar",
   "secoes": {
     "visao_geral": {
       "title": "Visão Geral",
-      "analysis": "O período de 4 meses de 2026 da empresa BOLO DE ROLO AEROPORTO VIX fechou com receita realizada de R$ 813.424 e despesa total (custo + despesa + imposto) de R$ 711.053, resultando em lucro líquido de R$ 102.372 — margem de +12,6%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (março, R$ 223.428) projeta líquido mensal de R$ 45.664 — anualizando para R$ 547.974. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ 467.687, cenário positivo caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "O período de 4 meses de 2026 da empresa BOLO DE ROLO AEROPORTO VIX fechou com receita realizada de R$ 821.324 e despesa total (custo + despesa + imposto) de R$ 711.053, resultando em lucro líquido de R$ 110.271 — margem de +13,4%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (março, R$ 223.428) projeta líquido mensal de R$ 45.664 — anualizando para R$ 547.974. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ 475.587, cenário positivo caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     },
     "receita": {
       "title": "Receita",
-      "analysis": "Receita realizada YTD: R$ 813.424. Categorias detalhadas no extrato.\n\nA carteira a receber está em R$ 0 — ciclo de recebimento curto, característico de operação com forte componente cartão/PIX. O orçamento mensal de receita é R$ 223.428, baseado no mês mais forte do histórico realizado."
+      "analysis": "Receita realizada YTD: R$ 821.324. Categorias detalhadas no extrato.\n\nA carteira a receber está em R$ 0 — ciclo de recebimento curto, característico de operação com forte componente cartão/PIX. O orçamento mensal de receita é R$ 223.428, baseado no mês mais forte do histórico realizado."
     },
     "despesa": {
       "title": "Despesa",
-      "analysis": "O total de saídas foi R$ 711.053, decomposto em: custo variável R$ 282.778 (35% da receita), despesa operacional R$ 320.465 (39% da receita) e impostos R$ 107.810 (13% da receita).\n\n O passivo total a pagar (a vencer + atrasado) é R$ 0 — em linha com o ciclo da operação."
+      "analysis": "O total de saídas foi R$ 711.053, decomposto em: custo variável R$ 282.778 (34% da receita), despesa operacional R$ 320.465 (39% da receita) e impostos R$ 107.810 (13% da receita).\n\n O passivo total a pagar (a vencer + atrasado) é R$ 0 — em linha com o ciclo da operação."
     },
     "fluxo_caixa": {
       "title": "Fluxo de Caixa",
-      "analysis": "O fluxo mensal mostra: janeiro R$ 8.311 · fevereiro R$ -2.807 · março R$ 45.279 · abril R$ 51.588. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 8 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ 467.687."
+      "analysis": "O fluxo mensal mostra: janeiro R$ 16.211 · fevereiro R$ -2.807 · março R$ 45.279 · abril R$ 51.588. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 8 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ 475.587."
     },
     "tesouraria": {
       "title": "Tesouraria",
@@ -26,11 +26,11 @@
     },
     "comparativo": {
       "title": "Comparativo",
-      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 203.356 vs orçada R$ 223.428 (-9,0% de variação). Líquido médio realizado R$ 25.593 vs orçado R$ 45.664.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
+      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 205.331 vs orçada R$ 223.428 (-8,1% de variação). Líquido médio realizado R$ 27.568 vs orçado R$ 45.664.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
     },
     "conclusao": {
       "title": "Conclusão e Recomendações",
-      "analysis": "Resumo do período: operação no positivo, margem de +12,6%, projeção de fechamento R$ 467.687.\n\n3 ações prioritárias:\n\n1. Comparar performance desta empresa com a média do grupo no Painel de Lojas — identificar se está no top ou bottom quartile.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 0: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "Resumo do período: operação no positivo, margem de +13,4%, projeção de fechamento R$ 475.587.\n\n3 ações prioritárias:\n\n1. Comparar performance desta empresa com a média do grupo no Painel de Lojas — identificar se está no top ou bottom quartile.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 0: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     }
   }
 }

@@ -1,24 +1,24 @@
 {
   "empresa": "BOALI SHOPPING PRAIA DA COSTA",
   "periodo": "Janeiro a maio 2026",
-  "generated_at": "2026-05-07T18:46:42.282Z",
+  "generated_at": "2026-05-07T21:53:47.884Z",
   "tipo": "preliminar",
   "secoes": {
     "visao_geral": {
       "title": "Visão Geral",
-      "analysis": "O período de 5 meses de 2026 da empresa BOALI SHOPPING PRAIA DA COSTA fechou com receita realizada de R$ 34.814 e despesa total (custo + despesa + imposto) de R$ 565.773, resultando em prejuízo líquido de R$ -530.959 — margem de -1525,1%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (janeiro, R$ 34.814) projeta líquido mensal de R$ -78.341 — anualizando para R$ -940.088. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ -1.079.344, cenário de atenção caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "O período de 5 meses de 2026 da empresa BOALI SHOPPING PRAIA DA COSTA fechou com receita realizada de R$ 168.337 e despesa total (custo + despesa + imposto) de R$ 565.773, resultando em prejuízo líquido de R$ -397.436 — margem de -236,1%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (fevereiro, R$ 80.955) projeta líquido mensal de R$ -32.200 — anualizando para R$ -386.395. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ -622.833, cenário de atenção caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     },
     "receita": {
       "title": "Receita",
-      "analysis": "Receita realizada YTD: R$ 34.814. Categorias detalhadas no extrato.\n\nA carteira a receber está em R$ 0 — ciclo de recebimento curto, característico de operação com forte componente cartão/PIX. O orçamento mensal de receita é R$ 34.814, baseado no mês mais forte do histórico realizado."
+      "analysis": "Receita realizada YTD: R$ 168.337. Categorias detalhadas no extrato.\n\nA carteira a receber está em R$ 0 — ciclo de recebimento curto, característico de operação com forte componente cartão/PIX. O orçamento mensal de receita é R$ 80.955, baseado no mês mais forte do histórico realizado."
     },
     "despesa": {
       "title": "Despesa",
-      "analysis": "O total de saídas foi R$ 565.773, decomposto em: custo variável R$ 220.821 (634% da receita), despesa operacional R$ 250.061 (718% da receita) e impostos R$ 94.891 (273% da receita).\n\n O passivo total a pagar (a vencer + atrasado) é R$ 0 — em linha com o ciclo da operação."
+      "analysis": "O total de saídas foi R$ 565.773, decomposto em: custo variável R$ 220.821 (131% da receita), despesa operacional R$ 250.061 (149% da receita) e impostos R$ 94.891 (56% da receita).\n\n O passivo total a pagar (a vencer + atrasado) é R$ 0 — em linha com o ciclo da operação."
     },
     "fluxo_caixa": {
       "title": "Fluxo de Caixa",
-      "analysis": "O fluxo mensal mostra: janeiro R$ -118.645 · fevereiro R$ -103.757 · março R$ -195.260 · abril R$ -103.786 · maio R$ -9.511. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 7 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ -1.079.344."
+      "analysis": "O fluxo mensal mostra: janeiro R$ -74.335 · fevereiro R$ -22.802 · março R$ -187.001 · abril R$ -103.786 · maio R$ -9.511. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 7 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ -622.833."
     },
     "tesouraria": {
       "title": "Tesouraria",
@@ -26,11 +26,11 @@
     },
     "comparativo": {
       "title": "Comparativo",
-      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 6.963 vs orçada R$ 34.814 (-80,0% de variação). Líquido médio realizado R$ -106.192 vs orçado R$ -78.341.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
+      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 33.667 vs orçada R$ 80.955 (-58,4% de variação). Líquido médio realizado R$ -79.487 vs orçado R$ -32.200.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
     },
     "conclusao": {
       "title": "Conclusão e Recomendações",
-      "analysis": "Resumo do período: prejuízo de R$ 530.959, margem de -1525,1%, projeção de fechamento R$ -1.079.344.\n\n3 ações prioritárias:\n\n1. Comparar performance desta empresa com a média do grupo no Painel de Lojas — identificar se está no top ou bottom quartile.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 0: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "Resumo do período: prejuízo de R$ 397.436, margem de -236,1%, projeção de fechamento R$ -622.833.\n\n3 ações prioritárias:\n\n1. Comparar performance desta empresa com a média do grupo no Painel de Lojas — identificar se está no top ou bottom quartile.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 0: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     }
   }
 }

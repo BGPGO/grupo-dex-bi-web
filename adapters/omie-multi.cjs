@@ -201,18 +201,49 @@ async function pullConta(conta, dataDir) {
   ]);
   const cliR = await fetchAllPaginated('/geral/clientes/', 'ListarClientes', {}, 'clientes_cadastro', path.join(cacheBase, 'clientes')).catch(() => ({ records: [] }));
   const ccR = await fetchAllPaginated('/geral/contacorrente/', 'ListarContasCorrentes', {}, 'ListarContasCorrentes', path.join(cacheBase, 'contas_correntes')).catch(() => ({ records: [] }));
-  const movR = await fetchAllPaginated(
+  // Dual-pull: por VENCIMENTO (pega títulos a vencer + parte dos realizados)
+  // e por PAGAMENTO (pega lançamentos diretos no caixa que NÃO têm dDtVenc).
+  // Dedupe ao final por (nCodTitulo|nCodMovCC|cGrupo).
+  const movRVenc = await fetchAllPaginated(
     '/financas/mf/', 'ListarMovimentos',
     {
       cExibirDepartamentos: 'S',
-      // Sem filtro de data, Omie retorna só janela limitada (~mês corrente).
-      // Forçando range 2020-2030 garantimos histórico completo.
       dDtVencDe: '01/01/2020',
       dDtVencAte: '31/12/2030',
     },
     'movimentos',
-    path.join(cacheBase, 'movimentos'), { style: 'camel' }
-  ).catch((e) => { return { records: [], _err: e.message }; });
+    path.join(cacheBase, 'movimentos_venc'), { style: 'camel' }
+  ).catch((e) => ({ records: [], _err: e.message }));
+  const movRPagto = await fetchAllPaginated(
+    '/financas/mf/', 'ListarMovimentos',
+    {
+      cExibirDepartamentos: 'S',
+      dDtPagtoDe: '01/01/2020',
+      dDtPagtoAte: '31/12/2030',
+    },
+    'movimentos',
+    path.join(cacheBase, 'movimentos_pagto'), { style: 'camel' }
+  ).catch((e) => ({ records: [], _err: e.message }));
+
+  // Combina + dedupa
+  const seen = new Set();
+  const dedupedRecords = [];
+  for (const m of [...(movRVenc.records || []), ...(movRPagto.records || [])]) {
+    const d = m.detalhes || {};
+    const key = `${d.nCodTitulo || ''}|${d.nCodMovCC || ''}|${d.cGrupo || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    dedupedRecords.push(m);
+  }
+  const movR = {
+    records: dedupedRecords,
+    _err: movRVenc._err || movRPagto._err || null,
+    _stats: {
+      venc: (movRVenc.records || []).length,
+      pagto: (movRPagto.records || []).length,
+      deduped: dedupedRecords.length,
+    },
+  };
 
   const categorias = catR.records;
   const departamentos = deptR.records;

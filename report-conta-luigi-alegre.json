@@ -1,12 +1,12 @@
 {
   "empresa": "LUIGI ALEGRE",
   "periodo": "Janeiro a maio 2026",
-  "generated_at": "2026-05-07T18:46:42.302Z",
+  "generated_at": "2026-05-07T21:53:47.900Z",
   "tipo": "preliminar",
   "secoes": {
     "visao_geral": {
       "title": "Visão Geral",
-      "analysis": "O período de 5 meses de 2026 da empresa LUIGI ALEGRE fechou com receita realizada de R$ 34.276 e despesa total (custo + despesa + imposto) de R$ 130.881, resultando em prejuízo líquido de R$ -96.605 — margem de -281,8%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (janeiro, R$ 21.633) projeta líquido mensal de R$ -4.543 — anualizando para R$ -54.520. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ -128.408, cenário de atenção caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "O período de 5 meses de 2026 da empresa LUIGI ALEGRE fechou com receita realizada de R$ 34.276 e despesa total (custo + despesa + imposto) de R$ 131.905, resultando em prejuízo líquido de R$ -97.629 — margem de -284,8%. A tendência mês a mês mostra recuperação.\n\nO orçamento construído sobre o melhor mês de receita (janeiro, R$ 21.633) projeta líquido mensal de R$ -4.748 — anualizando para R$ -56.979. A projeção de fechamento 2026 (real YTD + orçado dos meses restantes) indica R$ -130.867, cenário de atenção caso a operação consiga retornar ao patamar do melhor mês histórico.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     },
     "receita": {
       "title": "Receita",
@@ -14,23 +14,23 @@
     },
     "despesa": {
       "title": "Despesa",
-      "analysis": "O total de saídas foi R$ 130.881, decomposto em: custo variável R$ 79.989 (233% da receita), despesa operacional R$ 40.738 (119% da receita) e impostos R$ 10.154 (30% da receita).\n\n O passivo total a pagar (a vencer + atrasado) é R$ 0 — em linha com o ciclo da operação."
+      "analysis": "O total de saídas foi R$ 131.905, decomposto em: custo variável R$ 79.989 (233% da receita), despesa operacional R$ 41.762 (122% da receita) e impostos R$ 10.154 (30% da receita).\n\n O passivo total a pagar (a vencer + atrasado) é R$ 0 — em linha com o ciclo da operação."
     },
     "fluxo_caixa": {
       "title": "Fluxo de Caixa",
-      "analysis": "O fluxo mensal mostra: janeiro R$ -9.250 · fevereiro R$ -26.830 · março R$ -30.522 · abril R$ -21.996 · maio R$ -8.006. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 7 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ -128.408."
+      "analysis": "O fluxo mensal mostra: janeiro R$ -9.250 · fevereiro R$ -26.830 · março R$ -30.522 · abril R$ -21.996 · maio R$ -9.030. A tendência é de recuperação — operação está se ajustando.\n\nProjetando os 7 meses restantes pelo orçamento, o fechamento 2026 é estimado em R$ -130.867."
     },
     "tesouraria": {
       "title": "Tesouraria",
-      "analysis": "Posição de tesouraria: R$ 0 a receber vs R$ 0 a pagar. Razão: —× mais obrigações que recebíveis previstos.\n\nRecomendação: classificar obrigações por urgência de vencimento, identificar credores estratégicos e renegociar prazos onde possível. Para operações com ciclo de caixa apertado, manter linha de crédito pré-aprovada de pelo menos 1.5× a despesa mensal média (~R$ 12.221)."
+      "analysis": "Posição de tesouraria: R$ 0 a receber vs R$ 0 a pagar. Razão: —× mais obrigações que recebíveis previstos.\n\nRecomendação: classificar obrigações por urgência de vencimento, identificar credores estratégicos e renegociar prazos onde possível. Para operações com ciclo de caixa apertado, manter linha de crédito pré-aprovada de pelo menos 1.5× a despesa mensal média (~R$ 12.529)."
     },
     "comparativo": {
       "title": "Comparativo",
-      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 6.855 vs orçada R$ 21.633 (-68,3% de variação). Líquido médio realizado R$ -19.321 vs orçado R$ -4.543.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
+      "analysis": "Comparando com o orçamento mensal: receita realizada média R$ 6.855 vs orçada R$ 21.633 (-68,3% de variação). Líquido médio realizado R$ -19.526 vs orçado R$ -4.748.\n\nO comparativo trimestral está disponível na tela \"Comparativo\" do menu principal, com decomposição por categoria."
     },
     "conclusao": {
       "title": "Conclusão e Recomendações",
-      "analysis": "Resumo do período: prejuízo de R$ 96.605, margem de -281,8%, projeção de fechamento R$ -128.408.\n\n3 ações prioritárias:\n\n1. Comparar performance desta empresa com a média do grupo no Painel de Lojas — identificar se está no top ou bottom quartile.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 0: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
+      "analysis": "Resumo do período: prejuízo de R$ 97.629, margem de -284,8%, projeção de fechamento R$ -130.867.\n\n3 ações prioritárias:\n\n1. Comparar performance desta empresa com a média do grupo no Painel de Lojas — identificar se está no top ou bottom quartile.\n\n2. Revisão do orçamento: o \"melhor mês\" como referência é otimista. Vale também construir cenário conservador (média dos meses) e cenário stress (pior mês × 0.9) para entender a sensibilidade do líquido a quedas de receita.\n\n3. Gestão ativa do passivo de R$ 0: classificar por aging, identificar credores estratégicos, renegociar prazos antes de qualquer atraso que multiplique custos via juros e multas.\n\n_Este é um relatório PRELIMINAR gerado automaticamente a partir dos números do BI. Para análise narrativa profunda com IA, configure `ANTHROPIC_API_KEY` no servidor e rode `node generate-report.cjs`._"
     }
   }
 }
