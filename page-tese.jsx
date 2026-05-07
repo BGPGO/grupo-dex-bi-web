@@ -302,8 +302,9 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
       const mes = r[1];
       if (!mes) continue;
       const slug = r[9];
-      const sec = lojaSetor[slug] || "Outros";
+      const sec = lojaSetor[slug];
       const o = out[sec];
+      if (!o) continue;                // setor fora dos analisados (ex: "Outros" descartado)
       o.months.add(mes);
       if (r[0] === 'r') o.recByMes.set(mes, (o.recByMes.get(mes)||0) + r[5]);
       else              o.despByMes.set(mes, (o.despByMes.get(mes)||0) + r[5]);
