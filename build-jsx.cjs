@@ -31,6 +31,7 @@ const SOURCES = [
   'page-capital.jsx',
   'page-stress.jsx',
   'page-bridge.jsx',
+  'page-tese.jsx',
   'upsell-pages.jsx',
 ];
 
@@ -86,6 +87,7 @@ const PAGE_MODE_INJECT = `\n// Injetado por build-jsx.cjs a partir de bi.config.
     capital: '15 Capital Allocation',
     stress: '16 Stress Test',
     bridge: '17 Margin Bridge',
+    tese: '18 Tese Estatística',
     faturamento_produto: '18 Faturamento por Produto',
     curva_abc: '19 Curva ABC',
     marketing: '20 Marketing ADS',
@@ -227,6 +229,7 @@ const PAGE_MODE_INJECT = `\n// Injetado por build-jsx.cjs a partir de bi.config.
       capital: PageCapital,
       stress: PageStress,
       bridge: PageBridge,
+      tese: PageTese,
       relatorio: PageRelatorio,
       faturamento_produto: PageFaturamentoProduto,
       curva_abc: PageCurvaABC,
