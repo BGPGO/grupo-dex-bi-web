@@ -1027,6 +1027,26 @@ function inferCanal(label) {
   if (u.includes("SHOPPING")) return "Shopping";
   return "Rua";
 }
+function classFixoVar(catName) {
+  const u = (catName || "").toUpperCase();
+  if (/^COMPRAS|MERCADORIA|CMV|MAT[ÉE]RIA.PRIMA|INSUMO|FOOD.COST/.test(u)) return "variavel";
+  if (/ROYALT/.test(u)) return "variavel";
+  if (/REPASS/.test(u)) return "variavel";
+  if (/^FRETE\b|SERVI[ÇC]OS DE ENTREGA|DELIVERY/.test(u)) return "variavel";
+  if (/^COMISS/.test(u)) return "variavel";
+  if (/DEVOLU/.test(u)) return "variavel";
+  if (/ALUGUEL.*VARI/.test(u)) return "variavel";
+  if (/FUNDO.DE.PROMO/.test(u)) return "variavel";
+  if (/TAXAS? DE CART|MARKETPLACE|IFOOD/.test(u)) return "variavel";
+  if (/\b(ICMS|ISS|COFINS|PIS|TRIBUT|IOF|IRPJ|CSLL)\b/.test(u)) return "imposto";
+  if (/SIMPLES NACIONAL|\bDAS\b/.test(u)) return "imposto";
+  if (/^<.*>|DISPON[ÍI]VEL/.test(u)) return "outros";
+  if (/TRANSFER[ÊE]NCIA/.test(u)) return "outros";
+  if (/EMPR[ÉE]STIM|APLICA[ÇC][ÃA]O FINANC|DISTRIBUI[ÇC][ÃA]O|APORTE|INTEGRALIZA|NOVAS OPERA/.test(u)) return "outros";
+  if (/^JUROS\b|ENCARGOS FINAN/.test(u)) return "outros";
+  return "fixo";
+}
+
 function inferSetor(label) {
   const u = (label||"").toUpperCase();
   if (/DOMINOS|DOMINO|SPOLETO|BOALI/.test(u)) return "Food Delivery";
@@ -1212,6 +1232,6 @@ Object.assign(window, {
   PAGE_TITLES, StatusFilterSeg, STATUS_FILTERS,
   DrilldownBadge, applyDrilldown, extratoMonthKey,
   // Helpers de portfolio
-  inferMarca, inferCanal, inferSetor, colorForMarca, colorForSetor, fmtBRL0, fmtCompact,
+  inferMarca, inferCanal, inferSetor, classFixoVar, colorForMarca, colorForSetor, fmtBRL0, fmtCompact,
   SparkLine, HhiCard, ParetoChart, buildLojasRows,
 });

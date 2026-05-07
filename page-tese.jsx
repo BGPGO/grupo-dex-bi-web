@@ -282,31 +282,48 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
   const _mesCorrente = `${_hoje.getFullYear()}-${String(_hoje.getMonth()+1).padStart(2,"0")}`;
 
   // ===== ALL_TX agregado por (setor × mês × kind) — exclui mês corrente =====
+  // Decompõe despesa em variável / fixo / imposto pra computar margem operacional
   const setorMes = useMemo(() => {
     const out = {};
-    for (const sec of SETORES_ORD) out[sec] = { months: new Set(), recByMes: new Map(), despByMes: new Map() };
+    for (const sec of SETORES_ORD) out[sec] = {
+      months: new Set(), recByMes: new Map(), despByMes: new Map(),
+      varByMes: new Map(), fixByMes: new Map(), impByMes: new Map(),
+    };
+    const cfv = window.classFixoVar || (() => "fixo");
     for (const r of ALL_TX) {
       if (r[6] !== 1) continue;
       const mes = r[1];
       if (!mes) continue;
-      if (mes >= _mesCorrente) continue;  // exclui mês corrente em curso
+      if (mes >= _mesCorrente) continue;
       const slug = r[9];
       const sec = lojaSetor[slug];
       const o = out[sec];
       if (!o) continue;
       o.months.add(mes);
-      if (r[0] === 'r') o.recByMes.set(mes, (o.recByMes.get(mes)||0) + r[5]);
-      else              o.despByMes.set(mes, (o.despByMes.get(mes)||0) + r[5]);
+      if (r[0] === 'r') {
+        o.recByMes.set(mes, (o.recByMes.get(mes)||0) + r[5]);
+      } else {
+        o.despByMes.set(mes, (o.despByMes.get(mes)||0) + r[5]);
+        const cl = cfv(r[3]);
+        if (cl === "variavel") o.varByMes.set(mes, (o.varByMes.get(mes)||0) + r[5]);
+        else if (cl === "imposto") o.impByMes.set(mes, (o.impByMes.get(mes)||0) + r[5]);
+        else if (cl === "fixo") o.fixByMes.set(mes, (o.fixByMes.get(mes)||0) + r[5]);
+        // outros descartados
+      }
     }
-    // Para cada setor, alinha sequência de meses (desde o mais antigo até o mais recente real)
     const result = {};
     for (const sec of SETORES_ORD) {
       const o = out[sec];
       const months = [...o.months].sort();
       const rec = months.map(m => o.recByMes.get(m) || 0);
       const desp = months.map(m => o.despByMes.get(m) || 0);
+      const varv = months.map(m => o.varByMes.get(m) || 0);
+      const fixv = months.map(m => o.fixByMes.get(m) || 0);
+      const impv = months.map(m => o.impByMes.get(m) || 0);
       const liq = rec.map((v,i) => v - desp[i]);
-      result[sec] = { months, rec, desp, liq };
+      // margem operacional mensal = (rec - var) / rec (capacidade de pagar fixo)
+      const margemOp = rec.map((r,i) => r > 0 ? ((r - varv[i]) / r) * 100 : 0);
+      result[sec] = { months, rec, desp, var: varv, fix: fixv, imp: impv, liq, margemOp };
     }
     return result;
   }, [ALL_TX, lojaSetor]);
@@ -353,13 +370,24 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
         const r3 = _stats.mean(d.rec.slice(-tt));
         ramp = r1 > 0 ? r3 / r1 : 1;
       }
+      // Margem operacional = (receita - variável) / receita
+      const totalVar = (d.var || []).reduce((s,v) => s+v, 0);
+      const totalFix = (d.fix || []).reduce((s,v) => s+v, 0);
+      const totalImp = (d.imp || []).reduce((s,v) => s+v, 0);
+      const margemOp = totalRec > 0 ? ((totalRec - totalVar) / totalRec) * 100 : 0;
+      const margemContrib = totalRec > 0 ? ((totalRec - totalVar - totalImp) / totalRec) * 100 : 0;
+      const fixoMensal = (d.fix || []).length > 0 ? _stats.mean(d.fix) : 0;
+      const breakEvenRev = margemContrib > 0 ? fixoMensal / (margemContrib/100) : Infinity;
       out[sec] = {
         hasData: true, n, months: d.months, rec: d.rec, desp: d.desp, liq: d.liq,
         meanR, stdR: _stats.stdev(d.rec), cv: _stats.cv(d.rec),
         slopePct, sePct, ciLo, ciHi, significant, r2: reg.r2,
         seasonal12, trendVals, noise,
         lojas: lojasNoSetor, qtdLojas: lojasNoSetor.length,
-        totalRec, totalLiq, margem, ramp,
+        totalRec, totalLiq, totalVar, totalFix, totalImp,
+        margem, margemOp, margemContrib,
+        fixoMensal, breakEvenRev,
+        ramp,
         sharpe: _stats.stdev(d.liq) > 0 ? _stats.mean(d.liq) / _stats.stdev(d.liq) : 0,
       };
     }
@@ -773,32 +801,34 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
 
       {/* §01 — Anatomia setorial */}
       <TeseSecao numero={1}
-        titulo="Anatomia do grupo: 4 negócios, 4 perfis"
-        subtitulo="A análise que importa começa pelo setor — não pela loja individual. Aqui a tabela mostra os 4 negócios lado a lado."
+        titulo="Anatomia do grupo: negócios e capacidade na maturidade"
+        subtitulo="A análise por setor mostra o perfil de cada negócio. Margem operacional = (receita − custo variável)/receita: é a parcela da receita que sobra pra cobrir custo fixo. Setor com margem op > 30% pode maturar saudável; menor que isso, dificilmente."
         insight={
           <>
             {(() => {
               const ss = SETORES_ORD.map(s => setorStats[s]).filter(s => s && s.hasData);
               if (!ss.length) return "Sem dados suficientes.";
-              const margens = ss.map(s => s.margem);
-              const setorMaiorMargem = SETORES_ORD.find(s => setorStats[s]?.margem === Math.max(...margens));
-              const setorMenorMargem = SETORES_ORD.find(s => setorStats[s]?.margem === Math.min(...margens));
-              return <>O setor com <b>maior margem</b> é <b style={{color:window.colorForSetor(setorMaiorMargem)}}>{setorMaiorMargem}</b> ({setorStats[setorMaiorMargem].margem.toFixed(1).replace(".",",")}%). O com <b>maior sangramento</b> é <b style={{color:"var(--red)"}}>{setorMenorMargem}</b> ({setorStats[setorMenorMargem].margem.toFixed(1).replace(".",",")}%). Diferença entre os extremos: <b>{(Math.max(...margens) - Math.min(...margens)).toFixed(1).replace(".",",")}pp</b>. Esse spread é onde mora a oportunidade.</>;
+              const mos = ss.map(s => s.margemOp);
+              const idxMax = mos.indexOf(Math.max(...mos));
+              const idxMin = mos.indexOf(Math.min(...mos));
+              const secMax = SETORES_ORD.filter(s => setorStats[s]?.hasData)[idxMax];
+              const secMin = SETORES_ORD.filter(s => setorStats[s]?.hasData)[idxMin];
+              return <>Setor com <b>maior margem operacional</b>: <b style={{color:window.colorForSetor(secMax)}}>{secMax}</b> ({mos[idxMax].toFixed(1).replace(".",",")}%) — cada R$ 100 de receita gera R$ {mos[idxMax].toFixed(0)} pra cobrir fixo. Pior: <b style={{color:"var(--red)"}}>{secMin}</b> ({mos[idxMin].toFixed(1).replace(".",",")}%). Setor com margem op &lt; 0 é estruturalmente inviável — vender mais aumenta o prejuízo.</>;
             })()}
           </>
         }
-        pergunta="Mas margem média esconde direção. Será que algum setor está acelerando ou desacelerando?"
+        pergunta="Sabendo a margem operacional, em quanto tempo cada setor cobre o custo fixo se mantiver crescimento histórico?"
       >
         <div className="t-scroll" style={{ overflowX: "auto" }}>
-          <table className="t" style={{ minWidth: 720 }}>
+          <table className="t" style={{ minWidth: 880 }}>
             <thead><tr>
               <th>Setor</th>
               <th className="num">Lojas</th>
               <th className="num">Receita total</th>
-              <th className="num">Líquido total</th>
-              <th className="num">Margem</th>
+              <th className="num" title="Receita - Custo Variável - Imposto - Custo Fixo">Líquido total</th>
+              <th className="num" title="(Receita - Variável)/Receita — capacidade de cobrir custo fixo">Marg Op</th>
               <th className="num">Crescimento %/mês</th>
-              <th className="num">Volatilidade (CV)</th>
+              <th className="num">CV</th>
               <th className="num">Meses</th>
             </tr></thead>
             <tbody>
@@ -807,7 +837,7 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
                 if (!s || !s.hasData) return (
                   <tr key={sec}><td><b>{sec}</b></td><td colSpan="7" className="num" style={{color:"var(--fg-3)"}}>Sem dados</td></tr>
                 );
-                const margemColor = s.margem >= 5 ? "var(--green)" : s.margem >= 0 ? "var(--cyan)" : "var(--red)";
+                const mopColor = s.margemOp >= 30 ? "var(--green)" : s.margemOp >= 10 ? "var(--cyan)" : s.margemOp >= 0 ? "var(--amber)" : "var(--red)";
                 const slopeColor = s.significant ? (s.slopePct >= 0 ? "var(--green)" : "var(--red)") : "var(--fg-3)";
                 return (
                   <tr key={sec}>
@@ -815,7 +845,7 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
                     <td className="num">{s.qtdLojas}</td>
                     <td className="num">{fmtCompactNum(s.totalRec)}</td>
                     <td className="num" style={{color: s.totalLiq >= 0 ? "var(--green)":"var(--red)"}}>{fmtCompactNum(s.totalLiq)}</td>
-                    <td className="num" style={{color:margemColor, fontWeight:700}}>{s.margem.toFixed(1).replace(".",",")}%</td>
+                    <td className="num" style={{color:mopColor, fontWeight:700}}>{s.margemOp.toFixed(1).replace(".",",")}%</td>
                     <td className="num" style={{color:slopeColor}}>{fmtPctSig(s.slopePct)} {!s.significant && <span style={{fontSize:10}}>(NS)</span>}</td>
                     <td className="num">{(s.cv*100).toFixed(0)}%</td>
                     <td className="num">{s.n}</td>
@@ -825,7 +855,38 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
             </tbody>
           </table>
         </div>
-        <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 8 }}>NS = não significativo (IC 95% cruza zero — pode ser ruído).</div>
+        <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 8 }}>
+          Margem Op = (Receita − Variável)/Receita. Mostra qual fração da receita sobra pra cobrir custo fixo. Setor com Margem Op &gt; 30% costuma ser saudável na maturidade; abaixo de 0 é estruturalmente inviável.
+        </div>
+
+        {/* Tempo até break-even por setor com crescimento histórico */}
+        {(() => {
+          const linhas = SETORES_ORD.filter(s => setorStats[s]?.hasData).map(sec => {
+            const s = setorStats[sec];
+            const recAtual = s.meanR;
+            const be = s.breakEvenRev;
+            const g = s.slopePct / 100;
+            let mesesBE = null, info = "";
+            if (!Number.isFinite(be)) info = "Inviável c/ estrutura atual (Margem Op ≤ 0)";
+            else if (recAtual >= be) { mesesBE = 0; info = `Já cobre fixo (folga ${((recAtual/be-1)*100).toFixed(0)}%)`; }
+            else if (g <= 0) info = "Crescimento atual ≤ 0 — não chega";
+            else { mesesBE = Math.log(be / recAtual) / Math.log(1 + g); info = `Em ${mesesBE.toFixed(0)} meses no ritmo atual`; }
+            return { sec, s, mesesBE, info };
+          });
+          return (
+            <div style={{ marginTop: 16, padding: 14, background: "rgba(34,211,238,0.04)", borderRadius: 8, border: "1px solid rgba(34,211,238,0.2)" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--cyan)", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Tempo até maturação no ritmo histórico</div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {linhas.map(l => (
+                  <div key={l.sec} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 13 }}>
+                    <b style={{color: window.colorForSetor(l.sec)}}>● {l.sec}</b>
+                    <span style={{ color: l.mesesBE === 0 ? "var(--green)" : (l.mesesBE != null && l.mesesBE < 24) ? "var(--cyan)" : "var(--red)" }}>{l.info}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </TeseSecao>
 
       {/* §02 — Trajetória 12+ meses (índice 100) */}

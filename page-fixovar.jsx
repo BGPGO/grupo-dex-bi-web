@@ -92,11 +92,14 @@ const PageFixoVar = ({ statusFilter, drilldown, setDrilldown, year, month }) => 
       // Diagnóstico
       let diagnostic = "OK";
       let diagColor = "var(--green)";
-      if (mcPct <= 0) { diagnostic = "Margem contribuição NEGATIVA — não cobre nem var/imp"; diagColor = "var(--red)"; }
+      if (mcPct <= 0) {
+        diagnostic = "Inviável — margem de contribuição negativa (cada R$ vendido aumenta o prejuízo)";
+        diagColor = "var(--red)";
+      }
       else if (gapBE <= 0) { diagnostic = `Acima do break-even (${(-gapBEPct).toFixed(0)}% folga)`; diagColor = "var(--green)"; }
       else if (gapBEPct < 30) { diagnostic = `Precisa crescer ${gapBEPct.toFixed(0)}% pra fechar conta`; diagColor = "var(--amber)"; }
       else if (gapBEPct < 100) { diagnostic = `Falta ${gapBEPct.toFixed(0)}% — turnaround viável`; diagColor = "var(--amber)"; }
-      else { diagnostic = `Falta ${gapBEPct.toFixed(0)}% — provavelmente inviável`; diagColor = "var(--red)"; }
+      else { diagnostic = `Falta ${gapBEPct.toFixed(0)}% — gap muito grande pra crescimento orgânico`; diagColor = "var(--red)"; }
       return {
         slug: c.slug, label: c.label,
         setor: window.inferSetor ? window.inferSetor(c.label) : "—",
@@ -159,46 +162,91 @@ const PageFixoVar = ({ statusFilter, drilldown, setDrilldown, year, month }) => 
   const fmtCompactN = (n) => window.fmtCompact ? window.fmtCompact(n) : "R$ " + Math.round(n);
   const fmtPctNum = (n) => Number.isFinite(n) ? n.toFixed(1).replace(".",",") + "%" : "∞";
 
-  // === Scatter break-even × atual ===
-  const Scatter = ({ data, height = 400 }) => {
+  // === Estado: taxa de crescimento mensal ajustável ===
+  const [growthPct, setGrowthPct] = useState(5);
+
+  // Tempo até atingir BE: log(BE/atual) / log(1+g)
+  const tempoBE = (l, gPct) => {
+    if (!Number.isFinite(l.breakEven)) return { meses: null, status: "inviavel" };
+    if (l.recMean <= 0) return { meses: null, status: "sem-receita" };
+    if (l.recMean >= l.breakEven) return { meses: 0, status: "ja-cobre" };
+    if (gPct <= 0) return { meses: null, status: "sem-crescimento" };
+    const m = Math.log(l.breakEven / l.recMean) / Math.log(1 + gPct/100);
+    return { meses: m, status: m < 12 ? "rapido" : m < 36 ? "viavel" : "longo" };
+  };
+
+  const STATUS_INFO = {
+    inviavel:        { lbl: "Inviável c/ estrutura atual",  c: "var(--red)" },
+    "sem-receita":   { lbl: "Sem receita",                  c: "var(--fg-3)" },
+    "ja-cobre":      { lbl: "Já cobre custo fixo",          c: "var(--green)" },
+    "sem-crescimento": { lbl: "Sem crescimento → não chega", c: "var(--red)" },
+    rapido:          { lbl: "Atinge em < 12 meses",         c: "var(--green)" },
+    viavel:          { lbl: "Atinge em 12-36 meses",        c: "var(--amber)" },
+    longo:           { lbl: "Mais de 3 anos (improvável)",  c: "var(--red)" },
+  };
+
+  // === Linha do tempo de break-even (gráfico de barras horizontais) ===
+  const Timeline = ({ data, gPct, height = 600 }) => {
     if (!data || !data.length) return null;
-    const W = 760, ml = 60, mr = 14, mt = 20, mb = 50;
-    const cw = W - ml - mr, ch = height - mt - mb;
-    const points = data.filter(d => Number.isFinite(d.breakEven) && d.recMean > 0);
-    if (!points.length) return null;
-    const maxX = Math.max(...points.map(d => d.recMean), 1);
-    const maxY = Math.max(...points.map(d => Math.min(d.breakEven, maxX*5)), 1);
-    const max = Math.max(maxX, maxY);
-    const x = (v) => ml + (v / max) * cw;
-    const y = (v) => mt + ch - (Math.min(v, max) / max) * ch;
+    const W = 880;
+    const rowH = 24;
+    const ml = 220, mr = 60, mt = 30;
+    const enriched = data.map(l => ({ ...l, ...tempoBE(l, gPct) }));
+    enriched.sort((a,b) => {
+      if (a.meses === 0 && b.meses !== 0) return -1;
+      if (b.meses === 0 && a.meses !== 0) return 1;
+      if (a.meses == null && b.meses == null) return 0;
+      if (a.meses == null) return 1;
+      if (b.meses == null) return -1;
+      return a.meses - b.meses;
+    });
+    const maxMeses = 36;
+    const cw = W - ml - mr;
+    const x = (m) => ml + Math.min(maxMeses, Math.max(0, m)) / maxMeses * cw;
+    const totalH = mt + enriched.length * rowH + 30;
     return (
-      <svg viewBox={`0 0 ${W} ${height}`} style={{ display: "block", width: "100%", height: "auto", maxWidth: W }}>
-        {/* Linha y=x (break-even) */}
-        <line x1={x(0)} y1={y(0)} x2={x(max)} y2={y(max)} stroke="var(--amber)" strokeWidth={1.5} strokeDasharray="6,4" />
-        <text x={x(max)-6} y={y(max)+14} textAnchor="end" fontSize="10" fill="var(--amber)">y = x · break-even</text>
-        {/* Grid */}
-        {[0, 0.25, 0.5, 0.75, 1].map(p => (
-          <g key={p}>
-            <line x1={ml} y1={y(max*p)} x2={W-mr} y2={y(max*p)} stroke="var(--border)" strokeDasharray="3,3" />
-            <text x={ml-5} y={y(max*p)+3} textAnchor="end" fontSize="9" fill="var(--fg-3)">{fmtCompactN(max*p)}</text>
-            <line x1={x(max*p)} y1={mt} x2={x(max*p)} y2={mt+ch} stroke="var(--border)" strokeDasharray="3,3" />
-            <text x={x(max*p)} y={height-30} textAnchor="middle" fontSize="9" fill="var(--fg-3)">{fmtCompactN(max*p)}</text>
+      <svg viewBox={`0 0 ${W} ${totalH}`} style={{ display: "block", width: "100%", height: "auto", maxWidth: W }}>
+        {/* Eixo X: meses */}
+        {[0, 6, 12, 18, 24, 30, 36].map(m => (
+          <g key={m}>
+            <line x1={x(m)} y1={mt-8} x2={x(m)} y2={totalH-20} stroke="var(--border)" strokeDasharray="3,3" />
+            <text x={x(m)} y={mt-12} textAnchor="middle" fontSize="10" fill="var(--fg-3)">{m}m</text>
           </g>
         ))}
-        {/* Pontos */}
-        {points.map((d,i) => {
-          const above = d.recMean >= d.breakEven;
-          const c = above ? "var(--green)" : (d.gapBEPct < 30 ? "var(--amber)" : "var(--red)");
-          const r = Math.max(4, Math.min(14, Math.sqrt(d.receita / 1e5)));
+        {/* Linhas verdes referência: 12 e 36 meses */}
+        <line x1={x(12)} y1={mt-8} x2={x(12)} y2={totalH-20} stroke="var(--green)" strokeWidth={1.5} strokeDasharray="4,3" />
+        <text x={x(12)} y={totalH-6} textAnchor="middle" fontSize="9" fill="var(--green)">1 ano</text>
+        <line x1={x(36)} y1={mt-8} x2={x(36)} y2={totalH-20} stroke="var(--amber)" strokeWidth={1.5} strokeDasharray="4,3" />
+        <text x={x(36)} y={totalH-6} textAnchor="middle" fontSize="9" fill="var(--amber)">3 anos</text>
+        {/* Barras */}
+        {enriched.map((l,i) => {
+          const yRow = mt + i * rowH;
+          const info = STATUS_INFO[l.status];
+          let barEnd = ml;
+          if (l.meses === 0) barEnd = ml + 6;
+          else if (l.meses != null) barEnd = x(l.meses);
+          else barEnd = x(maxMeses); // inviável → barra vermelha cobre tudo
+          const barColor = info.c;
           return (
-            <g key={d.slug} onClick={() => setDrilldown && setDrilldown({ type: 'conta', value: d.slug, label: d.label })} style={{ cursor: setDrilldown ? "pointer" : "default" }}>
-              <circle cx={x(d.recMean)} cy={y(Math.min(d.breakEven, max))} r={r} fill={c} opacity={0.55} stroke={c} strokeWidth={1.5} />
-              <title>{`${d.label}\nReceita média: ${fmtCompactN(d.recMean)}\nBreak-even: ${fmtCompactN(d.breakEven)}\nGap: ${fmtPctNum(d.gapBEPct)}\n${d.diagnostic}`}</title>
+            <g key={l.slug} onClick={() => setDrilldown && setDrilldown({type:'conta',value:l.slug,label:l.label})} style={{cursor: setDrilldown?"pointer":"default"}}>
+              <text x={ml-8} y={yRow + rowH/2 + 4} textAnchor="end" fontSize="11" fill="var(--fg-2)">{l.label.length > 32 ? l.label.slice(0,30)+"…" : l.label}</text>
+              <rect x={ml} y={yRow+5} width={barEnd - ml} height={rowH-10}
+                fill={barColor} opacity={l.meses != null ? 0.75 : 0.25}
+                stroke={barColor} strokeWidth={1}
+                strokeDasharray={l.meses == null ? "4,3" : ""} rx={3} />
+              {l.meses != null && (
+                <text x={barEnd + 6} y={yRow + rowH/2 + 4} fontSize="11" fill={barColor} fontWeight="600">
+                  {l.meses === 0 ? "✓ já cobre" : `${l.meses.toFixed(1)} meses`}
+                </text>
+              )}
+              {l.meses == null && (
+                <text x={ml + 8} y={yRow + rowH/2 + 4} fontSize="11" fill="var(--bg)" fontWeight="700">
+                  {info.lbl}
+                </text>
+              )}
             </g>
           );
         })}
-        <text x={W/2} y={height-6} textAnchor="middle" fontSize="11" fill="var(--fg-2)" fontWeight="600">Receita média mensal atual →</text>
-        <text x={14} y={height/2} textAnchor="middle" fontSize="11" fill="var(--fg-2)" fontWeight="600" transform={`rotate(-90 14 ${height/2})`}>Break-even revenue (R$ que precisa pra fechar conta) →</text>
       </svg>
     );
   };
@@ -229,12 +277,14 @@ const PageFixoVar = ({ statusFilter, drilldown, setDrilldown, year, month }) => 
           </div>
           <div style={{ padding: 14, borderRadius: 8, background: "var(--bg)" }}>
             <div style={{ fontSize: 11, color: "var(--fg-3)", textTransform: "uppercase" }}>Break-even mensal</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--amber)", marginTop: 4 }}>{fmtCompactN(setorAgg.grupo.breakEven)}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: Number.isFinite(setorAgg.grupo.breakEven) ? "var(--amber)" : "var(--red)", marginTop: 4 }}>{Number.isFinite(setorAgg.grupo.breakEven) ? fmtCompactN(setorAgg.grupo.breakEven) : "inviável"}</div>
           </div>
           <div style={{ padding: 14, borderRadius: 8, background: "var(--bg)" }}>
             <div style={{ fontSize: 11, color: "var(--fg-3)", textTransform: "uppercase" }}>Gap até fechar conta</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: setorAgg.grupo.gapBEPct > 0 ? "var(--red)" : "var(--green)", marginTop: 4 }}>
-              {setorAgg.grupo.gapBEPct > 0 ? "+" : ""}{fmtPctNum(setorAgg.grupo.gapBEPct)} {setorAgg.grupo.gapBEPct > 0 ? "(crescer)" : "(folga)"}
+              {!Number.isFinite(setorAgg.grupo.gapBEPct) ? "estrutura inviável"
+                : setorAgg.grupo.gapBEPct > 0 ? `+${fmtPctNum(setorAgg.grupo.gapBEPct)} (crescer)`
+                : `${fmtPctNum(setorAgg.grupo.gapBEPct)} (folga)`}
             </div>
           </div>
         </div>
@@ -271,9 +321,11 @@ const PageFixoVar = ({ statusFilter, drilldown, setDrilldown, year, month }) => 
                   <td className="num">{fmtPctNum(s.pVar)}</td>
                   <td className="num">{fmtPctNum(s.pImp)}</td>
                   <td className="num" style={{ fontWeight: 700, color: s.mcPct > 30 ? "var(--green)" : s.mcPct > 0 ? "var(--cyan)" : "var(--red)" }}>{fmtPctNum(s.mcPct)}</td>
-                  <td className="num amber">{fmtCompactN(s.breakEven)}</td>
+                  <td className="num" style={{color: Number.isFinite(s.breakEven) ? "var(--amber)" : "var(--red)", fontStyle: Number.isFinite(s.breakEven) ? "normal" : "italic"}}>{Number.isFinite(s.breakEven) ? fmtCompactN(s.breakEven) : "inviável"}</td>
                   <td style={{ color: dColor, fontWeight: 600, fontSize: 12 }}>
-                    {ok ? `+${(-s.gapBEPct).toFixed(0)}% folga` : `precisa +${s.gapBEPct.toFixed(0)}%`}
+                    {!Number.isFinite(s.breakEven) ? "Margem op ≤ 0 — corte custo fixo/var ou feche"
+                      : ok ? `+${(-s.gapBEPct).toFixed(0)}% folga`
+                      : `precisa +${s.gapBEPct.toFixed(0)}%`}
                   </td>
                 </tr>
               );
@@ -282,13 +334,50 @@ const PageFixoVar = ({ statusFilter, drilldown, setDrilldown, year, month }) => 
         </table>
       </div>
 
-      {/* === Scatter === */}
+      {/* === Timeline: tempo até break-even === */}
       <div className="card" style={{ marginTop: 16 }}>
-        <h2 className="card-title">Mapa: receita atual × break-even (cada bolha = uma loja)</h2>
-        <p style={{ fontSize: 12, color: "var(--fg-2)", marginBottom: 8 }}>
-          Linha amarela = break-even (y=x). Lojas <b style={{color:"var(--green)"}}>abaixo da linha</b> já fecham conta. Lojas <b style={{color:"var(--red)"}}>acima</b> precisam crescer pra cobrir o fixo. Click filtra todo o BI.
+        <h2 className="card-title">Tempo até break-even (assumindo crescimento mensal)</h2>
+        <p style={{ fontSize: 13, color: "var(--fg-2)", marginBottom: 12, lineHeight: 1.5 }}>
+          Quanto cada loja levaria pra atingir o break-even <b>se mantiver um crescimento mensal de receita</b>. Estrutura de custos (fixo + variável + imposto) <b>congelada</b>. Fórmula: meses = log(BE/atual) ÷ log(1 + g).
         </p>
-        <Scatter data={lojas} />
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+          <label style={{ fontSize: 12, color: "var(--fg-2)", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>Crescimento mensal:</label>
+          <input type="range" min={0} max={20} step={0.5} value={growthPct}
+            onChange={e => setGrowthPct(Number(e.target.value))}
+            style={{ width: 280, accentColor: "var(--cyan)" }} />
+          <span style={{ fontSize: 18, color: "var(--cyan)", fontWeight: 700, minWidth: 60 }}>{growthPct.toFixed(1)}%</span>
+          <span style={{ fontSize: 11, color: "var(--fg-3)" }}>
+            {growthPct === 0 ? "(sem crescimento — só quem já cobre)" :
+             growthPct < 3 ? "(conservador)" :
+             growthPct < 8 ? "(moderado, ritmo histórico de varejo)" :
+             growthPct < 15 ? "(agressivo, ramp-up)" : "(extremo, raro de sustentar)"}
+          </span>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+            {[3, 5, 10, 15].map(p => (
+              <button key={p} className="btn-ghost" onClick={() => setGrowthPct(p)}
+                style={{ fontSize: 11, padding: "4px 10px", fontWeight: growthPct === p ? 700 : 400 }}>
+                {p}%
+              </button>
+            ))}
+          </div>
+        </div>
+        <Timeline data={lojas} gPct={growthPct} />
+        <div style={{ marginTop: 14, padding: 12, background: "rgba(34,211,238,0.04)", borderRadius: 6, fontSize: 12, lineHeight: 1.6 }}>
+          {(() => {
+            const enr = lojas.map(l => ({ ...l, ...tempoBE(l, growthPct) }));
+            const jaCobre = enr.filter(e => e.meses === 0).length;
+            const rapido = enr.filter(e => e.status === "rapido").length;
+            const viavel = enr.filter(e => e.status === "viavel").length;
+            const longo = enr.filter(e => e.status === "longo").length;
+            const inviavel = enr.filter(e => e.status === "inviavel" || e.status === "sem-crescimento").length;
+            return <>
+              <b>No cenário {growthPct.toFixed(1)}%/mês:</b>{" "}
+              <b style={{color:"var(--green)"}}>{jaCobre + rapido}</b> lojas atingem break-even em até 12 meses;{" "}
+              <b style={{color:"var(--amber)"}}>{viavel}</b> precisam de 1-3 anos;{" "}
+              <b style={{color:"var(--red)"}}>{longo + inviavel}</b> não conseguem sair do prejuízo organicamente — exigem corte de custo fixo ou margem.
+            </>;
+          })()}
+        </div>
       </div>
 
       {/* === Tabela detalhada === */}
@@ -318,7 +407,7 @@ const PageFixoVar = ({ statusFilter, drilldown, setDrilldown, year, month }) => 
                   <td className="num">{fmtPctNum(l.pImp)}</td>
                   <td className="num" style={{ color: l.mcPct > 30 ? "var(--green)" : l.mcPct > 0 ? "var(--cyan)" : "var(--red)", fontWeight: 600 }}>{fmtPctNum(l.mcPct)}</td>
                   <td className="num">{fmtCompactN(l.fixMean)}</td>
-                  <td className="num amber">{Number.isFinite(l.breakEven) ? fmtCompactN(l.breakEven) : "∞"}</td>
+                  <td className="num amber" style={{fontStyle: !Number.isFinite(l.breakEven) ? "italic" : "normal", color: !Number.isFinite(l.breakEven) ? "var(--red)" : "var(--amber)"}}>{Number.isFinite(l.breakEven) ? fmtCompactN(l.breakEven) : "inviável"}</td>
                   <td className="num" style={{ color: l.liqMean >= 0 ? "var(--green)" : "var(--red)", fontWeight: 600 }}>{fmtCompactN(l.liqMean)}</td>
                   <td style={{ color: l.diagColor, fontSize: 11 }}>{l.diagnostic}</td>
                 </tr>
