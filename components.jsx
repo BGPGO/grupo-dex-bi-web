@@ -53,6 +53,11 @@ const Sidebar = ({ active, onSelect, open }) => {
     { id: "orcamento", icon: "money", label: "Orçamento" },
     { id: "lojas", icon: "compare", label: "Painel de Lojas" },
     { id: "risco", icon: "chart", label: "Risco & Concentração" },
+    { id: "scorecard", icon: "chart", label: "Scorecard" },
+    { id: "quadrante", icon: "compare", label: "Matriz Estratégica" },
+    { id: "capital", icon: "invest", label: "Capital Allocation" },
+    { id: "stress", icon: "sliders", label: "Stress Test" },
+    { id: "bridge", icon: "flow", label: "Margin Bridge" },
     { id: "indicators", icon: "chart", label: "Indicadores" },
     { id: "faturamento_produto", icon: "money", label: "Faturamento" },
     { id: "curva_abc", icon: "chart", label: "Curva ABC" },
@@ -124,6 +129,11 @@ const PAGE_TITLES = {
   orcamento: "Orçamento",
   lojas: "Painel de Lojas",
   risco: "Risco & Concentração",
+  scorecard: "Scorecard de Qualidade",
+  quadrante: "Matriz Estratégica",
+  capital: "Capital Allocation",
+  stress: "Stress Test",
+  bridge: "Margin Bridge",
   hierarquia: "Hierarquia ADS",
   detalhado: "Detalhado",
   profunda_cliente: "Profunda Cliente",
@@ -989,10 +999,201 @@ function applyDrilldown(extrato, dd) {
   return extrato;
 }
 
+// ============================================================
+// Helpers compartilhados — usados por page-lojas, page-risco, page-scorecard,
+// page-quadrante, page-capital, page-stress, page-bridge.
+// ============================================================
+function inferMarca(label) {
+  const u = (label||"").toUpperCase();
+  if (u.includes("DOMINOS") || u.includes("DOMINO")) return "Domino's";
+  if (u.includes("OPTCÁLIA") || u.includes("OPTCALIA") || u.includes("OPTCAL")) return "Optcália";
+  if (u.includes("OCULUM")) return "Oculum";
+  if (u.includes("BOALI")) return "Boali";
+  if (u.includes("BOLO DE ROLO") || u.includes("FAIR TRADE")) return "Bolo de Rolo";
+  if (u.includes("CASA BAUDUCCO") || u.includes("BAUDUCCO")) return "Casa Bauducco";
+  if (u.includes("LUIGI")) return "Luigi";
+  if (u.includes("NATUZON")) return "Natuzon";
+  if (u.includes("NOBEL") || u.includes("ZASTRAS")) return "Nobel & Zastras";
+  if (u.includes("SPOLETO")) return "Spoleto";
+  return "Outras";
+}
+function inferCanal(label) {
+  const u = (label||"").toUpperCase();
+  if (u.includes("AEROPORTO") || u.includes("GUARULHOS") || u.includes("SDU")) return "Aeroporto";
+  if (u.includes("SHOPPING")) return "Shopping";
+  return "Rua";
+}
+const _MARCA_COLORS = {
+  "Domino's": "#22d3ee", "Optcália": "#a78bfa", "Oculum": "#f59e0b", "Boali": "#10b981",
+  "Bolo de Rolo": "#ec4899", "Casa Bauducco": "#fbbf24", "Luigi": "#06b6d4",
+  "Natuzon": "#8b5cf6", "Nobel & Zastras": "#f43f5e", "Spoleto": "#84cc16", "Outras": "#6b7280"
+};
+function colorForMarca(marca) { return _MARCA_COLORS[marca] || "#6b7280"; }
+
+const fmtBRL0 = (n) => "R$ " + (window.formatBR ? window.formatBR(n||0, 0) : Math.round(n||0).toLocaleString("pt-BR"));
+function fmtCompact(n) {
+  const a = Math.abs(n||0);
+  const s = (n||0) < 0 ? "-" : "";
+  if (a >= 1e6) return s + "R$ " + (a/1e6).toFixed(2).replace(".",",") + "M";
+  if (a >= 1e3) return s + "R$ " + (a/1e3).toFixed(0) + "k";
+  return s + "R$ " + Math.round(a);
+}
+
+// Sparkline simples usado em rankings
+const SparkLine = ({ values, color = "var(--cyan)", w = 80, h = 22 }) => {
+  if (!values || values.length === 0) return null;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = (max - min) || 1;
+  const x = (i) => (i / Math.max(1, values.length - 1)) * w;
+  const y = (v) => h - ((v - min) / range) * h;
+  const path = values.map((v,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  return (
+    <svg width={w} height={h} style={{ display: "block" }}>
+      <path d={path} fill="none" stroke={color} strokeWidth={1.5} />
+    </svg>
+  );
+};
+
+// Constrói linhas de KPIs por loja a partir de DRE_BY_CONTA + CONTAS
+function buildLojasRows() {
+  const B = window.BIT || {};
+  const REF_YEAR = window.REF_YEAR || new Date().getFullYear();
+  const DBC = B.DRE_BY_CONTA || {};
+  const CONTAS = B.CONTAS || [];
+  return CONTAS.map(c => {
+    const d = DBC[c.slug];
+    if (!d) return null;
+    const dre = d.MONTH_DRE || [];
+    const orc = d.ORCAMENTO || {};
+    const receita = dre.reduce((s,m)=>s+m.receita, 0);
+    const custo = dre.reduce((s,m)=>s+m.custo, 0);
+    const despesa = dre.reduce((s,m)=>s+m.despesa, 0);
+    const imposto = dre.reduce((s,m)=>s+m.imposto, 0);
+    const liquido = receita - custo - despesa - imposto;
+    const margem = receita > 0 ? (liquido / receita) * 100 : 0;
+    const monthsActive = dre.filter(m => m.count > 0).length;
+    const recMes = dre.map(m => m.receita);
+    const liqMes = dre.map(m => m.liquido);
+    // crescimento: regressão linear simples sobre meses ativos
+    const ativos = dre.filter(m => m.count > 0);
+    let slope = 0;
+    if (ativos.length >= 2) {
+      const xs = ativos.map((_,i) => i);
+      const ys = ativos.map(m => m.receita);
+      const n = xs.length;
+      const sumX = xs.reduce((a,b) => a+b, 0);
+      const sumY = ys.reduce((a,b) => a+b, 0);
+      const sumXY = xs.reduce((s,x,i) => s + x*ys[i], 0);
+      const sumXX = xs.reduce((s,x) => s + x*x, 0);
+      const meanY = sumY / n || 1;
+      slope = ((n*sumXY - sumX*sumY) / Math.max(1e-9, n*sumXX - sumX*sumX)) / Math.abs(meanY) * 100;
+    }
+    // estabilidade: 1 - CV mensal das receitas ativas
+    let cv = 0;
+    if (ativos.length >= 2) {
+      const meanR = ativos.reduce((s,m)=>s+m.receita, 0) / ativos.length || 1;
+      const variance = ativos.reduce((s,m) => s + Math.pow(m.receita - meanR, 2), 0) / ativos.length;
+      const stdev = Math.sqrt(variance);
+      cv = stdev / Math.abs(meanR);
+    }
+    const orcLiqMes = (orc.receita_mes||0) - (orc.custo_mes||0) - (orc.despesa_mes||0) - (orc.imposto_mes||0);
+    const realLiqMes = monthsActive > 0 ? liquido / monthsActive : 0;
+    const cobertura = orcLiqMes !== 0 ? realLiqMes / orcLiqMes : 0;
+    return {
+      slug: c.slug, label: c.label, cliente_grupo: c.cliente_grupo,
+      marca: inferMarca(c.label), canal: inferCanal(c.label),
+      receita, custo, despesa, imposto, liquido, margem,
+      monthsActive, recMes, liqMes, slope, cv, cobertura,
+      orcLiqMes, realLiqMes,
+      orcReceitaMes: orc.receita_mes||0, orcCustoMes: orc.custo_mes||0,
+      orcDespesaMes: orc.despesa_mes||0, orcImpostoMes: orc.imposto_mes||0,
+    };
+  }).filter(Boolean);
+}
+
+// Gauge simples HHI: <1500 verde · 1500-2500 amber · >2500 vermelho
+const HhiCard = ({ label, value, hint, n }) => {
+  const v = Math.min(value||0, 10000);
+  const pct = (v / 10000) * 100;
+  let tone = "green", status = "Saudável";
+  if (v > 2500) { tone = "red"; status = "Alta"; }
+  else if (v > 1500) { tone = "amber"; status = "Moderada"; }
+  const color = tone === "red" ? "var(--red)" : (tone === "amber" ? "var(--amber)" : "var(--green)");
+  return (
+    <div className="card" style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600 }}>{label}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8 }}>
+        <div style={{ fontSize: 32, fontWeight: 800, color, lineHeight: 1.1 }}>{Math.round(value||0)}</div>
+        <div style={{ fontSize: 12, color, fontWeight: 600 }}>{status}</div>
+      </div>
+      <div style={{ background: "var(--border)", borderRadius: 4, height: 6, marginTop: 10, overflow: "hidden" }}>
+        <div style={{ width: pct + "%", height: "100%", background: color }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--fg-3)", marginTop: 3 }}>
+        <span>0</span><span>1500</span><span>2500</span><span>10k</span>
+      </div>
+      {hint && <div style={{ fontSize: 11, color: "var(--fg-2)", marginTop: 6 }}>{hint}</div>}
+      {n != null && <div style={{ fontSize: 10, color: "var(--fg-3)", marginTop: 2 }}>{n} {n === 1 ? "item" : "itens"}</div>}
+    </div>
+  );
+};
+
+// Pareto: barras + linha cumulativa %
+const ParetoChart = ({ data, valKey = "valor", topN = 10, height = 220 }) => {
+  if (!data || data.length === 0) return null;
+  const top = data.slice(0, topN);
+  const total = data.reduce((s, x) => s + (x[valKey]||0), 0);
+  const W = 720, ml = 50, mr = 40, mt = 12, mb = 60;
+  const cw = W - ml - mr;
+  const ch = height - mt - mb;
+  const max = Math.max(...top.map(x => x[valKey]||0), 1);
+  const slot = cw / Math.max(1, top.length);
+  const barW = slot * 0.6;
+  const x = (i) => ml + i*slot + (slot - barW)/2;
+  const yBar = (v) => mt + ch - (v / max) * ch;
+  const yLine = (p) => mt + ch - (p / 100) * ch;
+  let cum = 0;
+  const cumData = top.map(d => { cum += (d[valKey]||0); return { ...d, cumPct: total > 0 ? (cum/total)*100 : 0 }; });
+  const linePath = cumData.map((d,i) => `${i===0?'M':'L'}${(x(i)+barW/2).toFixed(1)},${yLine(d.cumPct).toFixed(1)}`).join(' ');
+  return (
+    <div style={{ width: "100%", maxWidth: W }}>
+      <svg viewBox={`0 0 ${W} ${height}`} style={{ display: "block", width: "100%", height: "auto" }}>
+        {[0, 25, 50, 75, 100].map(p => (
+          <g key={p}>
+            <line x1={ml} y1={yLine(p)} x2={W-mr} y2={yLine(p)} stroke="var(--border)" strokeDasharray="3,3" />
+            <text x={W-mr+4} y={yLine(p)+3} fontSize="10" fill="var(--fg-3)">{p}%</text>
+          </g>
+        ))}
+        {cumData.map((d,i) => (
+          <rect key={i} x={x(i)} y={yBar(d[valKey]||0)} width={barW}
+            height={Math.max(1, (mt+ch) - yBar(d[valKey]||0))}
+            fill="var(--cyan)" opacity={0.7} rx={2} />
+        ))}
+        <path d={linePath} fill="none" stroke="var(--amber)" strokeWidth={2} />
+        {cumData.map((d,i) => (
+          <circle key={"d"+i} cx={x(i)+barW/2} cy={yLine(d.cumPct)} r={3} fill="var(--amber)" />
+        ))}
+        {cumData.map((d,i) => {
+          const lbl = (d.name || "").length > 18 ? (d.name||"").slice(0,16)+"…" : d.name;
+          return (
+            <text key={"lb"+i} x={x(i)+barW/2} y={height-30}
+              transform={`rotate(-30 ${x(i)+barW/2} ${height-30})`}
+              textAnchor="end" fontSize="10" fill="var(--fg-2)">{lbl}</text>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
 Object.assign(window, {
   Icon, Sidebar, Header, Filters, FiltersDrawer, InlineFilterBar, ExportButton, DEFAULT_FILTERS,
   MonthlyBars, SingleBars, DailyBars, StackedArea, TrendChart, MultiLine,
   BarList, BarListLine, BarListLegend, DivergingBars, Donut, Spark, KpiTile,
   PAGE_TITLES, StatusFilterSeg, STATUS_FILTERS,
   DrilldownBadge, applyDrilldown, extratoMonthKey,
+  // Helpers de portfolio
+  inferMarca, inferCanal, colorForMarca, fmtBRL0, fmtCompact,
+  SparkLine, HhiCard, ParetoChart, buildLojasRows,
 });

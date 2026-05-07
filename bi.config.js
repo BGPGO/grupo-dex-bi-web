@@ -40,6 +40,11 @@ module.exports = {
       orcamento: "active",             // tela de orçamento — análise específica
       lojas: "active",                 // ranking 24 lojas
       risco: "active",                 // HHI / concentração / risco
+      scorecard: "active",             // Buffett 5 pilares
+      quadrante: "active",             // BCG matrix
+      capital: "active",               // ROIC + realocação
+      stress: "active",                // stress test sliders
+      bridge: "active",                // P&L waterfall
       indicators: "upsell",            // PRO
       faturamento_produto: "upsell",   // PRO
       curva_abc: "upsell",             // PRO

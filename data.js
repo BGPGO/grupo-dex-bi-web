@@ -1,4 +1,4 @@
-/* BGP BI — gerado por build-data.cjs em 2026-05-07T15:26:45.256Z */
+/* BGP BI — gerado por build-data.cjs em 2026-05-07T16:23:36.735Z */
 /* Empresa: Grupo DEX | Ano ref: 2026 */
 const MONTHS = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 const MONTHS_FULL = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
