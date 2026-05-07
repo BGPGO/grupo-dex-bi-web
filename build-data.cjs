@@ -584,7 +584,7 @@ function buildSegment(rec, desp, year, label) {
         if (!dt || dt.getFullYear() !== year) continue;
         if (dt.getMonth() !== mi) continue;
         if (t.categoria !== cat.name) continue;
-        s -= t.valor;
+        s += t.valor;     // positivo — convenção: despesa absoluta (cálculo de líquido fica r - d)
       }
       return s;
     }),
