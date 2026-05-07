@@ -14,13 +14,16 @@ const PageBridge = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
 
   // Decompõe despesa em Aluguel / Salários / Outras filtrando categorias do ALL_TX
   // ALL_TX tuple: [kind, mes, dia, categoria, cliente, valor, realizado, fornecedor, cc, conta_slug]
+  const _hojeBR = new Date();
+  const _mesCorrenteBR = `${_hojeBR.getFullYear()}-${String(_hojeBR.getMonth()+1).padStart(2,"0")}`;
+
   const decompose = (slug) => {
     let receita = 0, custo = 0, imposto = 0;
     let aluguel = 0, salarios = 0, outrasDesp = 0;
     for (const r of ALL_TX) {
       if (r[6] !== 1) continue; // só realizado
       if (slug && r[9] !== slug) continue;
-      if (!r[1] || Number(r[1].slice(0,4)) !== REF_YEAR) continue;
+      if (!r[1] || r[1] >= _mesCorrenteBR) continue;  // exclui mês corrente
       const cat = (r[3] || "").toUpperCase();
       const v = r[5];
       if (r[0] === 'r') {

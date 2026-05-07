@@ -1093,32 +1093,57 @@ const SparkLine = ({ values, color = "var(--cyan)", w = 80, h = 22 }) => {
   );
 };
 
-// Constrói linhas de KPIs por loja a partir de DRE_BY_CONTA + CONTAS
+// Constrói linhas de KPIs por loja a partir de ALL_TX (TODOS os meses realizados,
+// excluindo mês corrente em curso). Mesma metodologia da Tese/FixoVar — garante
+// consistência entre todas as telas. Custo/despesa/imposto split via classFixoVar.
 function buildLojasRows() {
   const B = window.BIT || {};
-  const REF_YEAR = window.REF_YEAR || new Date().getFullYear();
-  const DBC = B.DRE_BY_CONTA || {};
+  const ALL_TX = window.ALL_TX || [];
   const CONTAS = B.CONTAS || [];
+  const DBC = B.DRE_BY_CONTA || {};
+  const cfv = window.classFixoVar || (() => "fixo");
+  const hoje = new Date();
+  const mesCorrente = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,"0")}`;
+
   return CONTAS.map(c => {
-    const d = DBC[c.slug];
-    if (!d) return null;
-    const dre = d.MONTH_DRE || [];
-    const orc = d.ORCAMENTO || {};
-    const receita = dre.reduce((s,m)=>s+m.receita, 0);
-    const custo = dre.reduce((s,m)=>s+m.custo, 0);
-    const despesa = dre.reduce((s,m)=>s+m.despesa, 0);
-    const imposto = dre.reduce((s,m)=>s+m.imposto, 0);
+    // Agrega por mês usando ALL_TX (exclui mês corrente)
+    const recByMes = new Map(), custoByMes = new Map(), despByMes = new Map(), impByMes = new Map();
+    const allMeses = new Set();
+    for (const r of ALL_TX) {
+      if (r[6] !== 1 || r[9] !== c.slug) continue;
+      const m = r[1];
+      if (!m || m >= mesCorrente) continue;
+      allMeses.add(m);
+      if (r[0] === "r") {
+        recByMes.set(m, (recByMes.get(m)||0) + r[5]);
+      } else {
+        const cl = cfv(r[3]);
+        if (cl === "variavel") custoByMes.set(m, (custoByMes.get(m)||0) + r[5]);
+        else if (cl === "imposto") impByMes.set(m, (impByMes.get(m)||0) + r[5]);
+        else if (cl === "fixo") despByMes.set(m, (despByMes.get(m)||0) + r[5]);
+        // outros descartados
+      }
+    }
+    const meses = [...allMeses].sort();
+    if (meses.length === 0) return null;
+    const recMes = meses.map(m => recByMes.get(m) || 0);
+    const custoMes = meses.map(m => custoByMes.get(m) || 0);
+    const despMes = meses.map(m => despByMes.get(m) || 0);
+    const impMes = meses.map(m => impByMes.get(m) || 0);
+    const liqMes = recMes.map((r,i) => r - custoMes[i] - despMes[i] - impMes[i]);
+    const receita = recMes.reduce((s,v) => s+v, 0);
+    const custo = custoMes.reduce((s,v) => s+v, 0);
+    const despesa = despMes.reduce((s,v) => s+v, 0);
+    const imposto = impMes.reduce((s,v) => s+v, 0);
     const liquido = receita - custo - despesa - imposto;
     const margem = receita > 0 ? (liquido / receita) * 100 : 0;
-    const monthsActive = dre.filter(m => m.count > 0).length;
-    const recMes = dre.map(m => m.receita);
-    const liqMes = dre.map(m => m.liquido);
-    // crescimento: regressão linear simples sobre meses ativos
-    const ativos = dre.filter(m => m.count > 0);
+    const monthsActive = meses.length;
+
+    // Regressão linear (slope %/mês)
     let slope = 0;
-    if (ativos.length >= 2) {
-      const xs = ativos.map((_,i) => i);
-      const ys = ativos.map(m => m.receita);
+    if (recMes.length >= 2) {
+      const xs = recMes.map((_,i) => i);
+      const ys = recMes;
       const n = xs.length;
       const sumX = xs.reduce((a,b) => a+b, 0);
       const sumY = ys.reduce((a,b) => a+b, 0);
@@ -1127,17 +1152,19 @@ function buildLojasRows() {
       const meanY = sumY / n || 1;
       slope = ((n*sumXY - sumX*sumY) / Math.max(1e-9, n*sumXX - sumX*sumX)) / Math.abs(meanY) * 100;
     }
-    // estabilidade: 1 - CV mensal das receitas ativas
+    // CV mensal de receita
     let cv = 0;
-    if (ativos.length >= 2) {
-      const meanR = ativos.reduce((s,m)=>s+m.receita, 0) / ativos.length || 1;
-      const variance = ativos.reduce((s,m) => s + Math.pow(m.receita - meanR, 2), 0) / ativos.length;
-      const stdev = Math.sqrt(variance);
-      cv = stdev / Math.abs(meanR);
+    if (recMes.length >= 2) {
+      const meanR = receita / recMes.length || 1;
+      const variance = recMes.reduce((s,v) => s + Math.pow(v - meanR, 2), 0) / recMes.length;
+      cv = Math.sqrt(variance) / Math.abs(meanR);
     }
-    const orcLiqMes = (orc.receita_mes||0) - (orc.custo_mes||0) - (orc.despesa_mes||0) - (orc.imposto_mes||0);
+    // Orçamento (preserva DBC.ORCAMENTO se existir, mas atualiza com o real do ALL_TX)
+    const orc = (DBC[c.slug] && DBC[c.slug].ORCAMENTO) || {};
     const realLiqMes = monthsActive > 0 ? liquido / monthsActive : 0;
+    const orcLiqMes = (orc.receita_mes||0) - (orc.custo_mes||0) - (orc.despesa_mes||0) - (orc.imposto_mes||0);
     const cobertura = orcLiqMes !== 0 ? realLiqMes / orcLiqMes : 0;
+
     return {
       slug: c.slug, label: c.label, cliente_grupo: c.cliente_grupo,
       marca: inferMarca(c.label), canal: inferCanal(c.label),
