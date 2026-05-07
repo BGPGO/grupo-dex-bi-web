@@ -693,6 +693,77 @@ const PageComparativo = ({ statusFilter, drilldown, setDrilldown, year, month })
   const a1 = useMemo(() => aggregate(p1), [p1, statusFilter]);
   const a2 = useMemo(() => aggregate(p2), [p2, statusFilter]);
 
+  // Orcamento por período: olha 12 meses anteriores ao início do período
+  // (apenas REALIZADOS), receita = max mensal, despesa = média mensal.
+  // Categorias seguem mesma regra. Resultado é multiplicado pelo nº de meses do período.
+  const orcamentoForPeriod = (p) => {
+    const allTx = window.ALL_TX || [];
+    const filterTx = window.filterTx;
+    const txFiltered = filterTx ? filterTx(allTx, 'realizado', drilldown) : allTx;
+    const { y, mIni, mFim } = periodBounds(p);
+    // Janela: 12 meses anteriores ao INICIO do período
+    let cy = mIni === 1 ? y - 1 : y;
+    let cm = mIni === 1 ? 12 : mIni - 1;
+    const months = [];
+    for (let i = 0; i < 12; i++) {
+      months.unshift(`${cy}-${String(cm).padStart(2, "0")}`);
+      cm--;
+      if (cm < 1) { cm = 12; cy--; }
+    }
+    const monthSet = new Set(months);
+    const byMes = new Map();
+    for (const m of months) byMes.set(m, { rec: 0, desp: 0, recCat: new Map(), despCat: new Map() });
+    for (const row of txFiltered) {
+      const [kind, mes, , categoria, , valor] = row;
+      if (!monthSet.has(mes)) continue;
+      const o = byMes.get(mes);
+      if (kind === "r") {
+        o.rec += valor;
+        o.recCat.set(categoria, (o.recCat.get(categoria) || 0) + valor);
+      } else {
+        o.desp += valor;
+        o.despCat.set(categoria, (o.despCat.get(categoria) || 0) + valor);
+      }
+    }
+    const valuesArr = [...byMes.values()];
+    const monthsActive = valuesArr.filter(o => o.rec > 0 || o.desp > 0).length || 1;
+    const maxRec = Math.max(0, ...valuesArr.map(o => o.rec));
+    const sumDesp = valuesArr.reduce((s, o) => s + o.desp, 0);
+    const avgDesp = sumDesp / monthsActive;
+    const allRecCats = new Set(), allDespCats = new Set();
+    for (const o of valuesArr) {
+      for (const k of o.recCat.keys()) allRecCats.add(k);
+      for (const k of o.despCat.keys()) allDespCats.add(k);
+    }
+    const recCatOrc = new Map();
+    for (const cat of allRecCats) {
+      const maxC = Math.max(0, ...valuesArr.map(o => o.recCat.get(cat) || 0));
+      recCatOrc.set(cat, maxC);
+    }
+    const despCatOrc = new Map();
+    for (const cat of allDespCats) {
+      const sumC = valuesArr.reduce((s, o) => s + (o.despCat.get(cat) || 0), 0);
+      despCatOrc.set(cat, sumC / monthsActive);
+    }
+    const nMesesP = mFim - mIni + 1;
+    const totalRec = maxRec * nMesesP;
+    const totalDesp = avgDesp * nMesesP;
+    const recCat = new Map();
+    for (const [cat, v] of recCatOrc) recCat.set(cat, v * nMesesP);
+    const despCat = new Map();
+    for (const [cat, v] of despCatOrc) despCat.set(cat, v * nMesesP);
+    return {
+      totalRec, totalDesp, liq: totalRec - totalDesp,
+      recCat, despCat,
+      janela: `${months[0]} a ${months[11]}`,
+      monthsActive,
+      nMesesP,
+    };
+  };
+
+  const o1 = useMemo(() => orcamentoForPeriod(p1), [p1, drilldown]);
+  const o2 = useMemo(() => orcamentoForPeriod(p2), [p2, drilldown]);
+
   const safePct = (a, b) => b !== 0 ? (a / b) * 100 : (a !== 0 ? 100 : 0);
   const diffReceita = a2.totalRec - a1.totalRec;
   const diffReceitaPct = safePct(diffReceita, a1.totalRec);
@@ -791,11 +862,17 @@ const PageComparativo = ({ statusFilter, drilldown, setDrilldown, year, month })
             <table className="t">
               <thead>
                 <tr>
-                  <th>Receita / Despesa</th>
-                  <th className="num">{periodLabel(p1)}</th>
-                  <th className="num">{periodLabel(p2)}</th>
-                  <th className="num">Δ Comparativo</th>
-                  <th className="num">%</th>
+                  <th rowSpan="2">Receita / Despesa</th>
+                  <th className="num" colSpan="2" style={{ borderLeft: "1px solid var(--border)" }}>{periodLabel(p1)}</th>
+                  <th className="num" colSpan="2" style={{ borderLeft: "1px solid var(--border)" }}>{periodLabel(p2)}</th>
+                  <th className="num" rowSpan="2" style={{ borderLeft: "1px solid var(--border)" }}>Δ Real</th>
+                  <th className="num" rowSpan="2">%</th>
+                </tr>
+                <tr>
+                  <th className="num" style={{ borderLeft: "1px solid var(--border)", fontSize: 11, fontWeight: 500 }}>Real</th>
+                  <th className="num" style={{ fontSize: 11, fontWeight: 500, color: "var(--fg-3)" }} title={`Orçamento P1 — janela ${o1.janela}`}>Orçado</th>
+                  <th className="num" style={{ borderLeft: "1px solid var(--border)", fontSize: 11, fontWeight: 500 }}>Real</th>
+                  <th className="num" style={{ fontSize: 11, fontWeight: 500, color: "var(--fg-3)" }} title={`Orçamento P2 — janela ${o2.janela}`}>Orçado</th>
                 </tr>
               </thead>
               <tbody>
@@ -807,20 +884,26 @@ const PageComparativo = ({ statusFilter, drilldown, setDrilldown, year, month })
                     </button>
                   </td>
                   <td className="num bold green">{fmt(a1.totalRec)}</td>
+                  <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic" }}>{fmt(o1.totalRec)}</td>
                   <td className="num bold green">{fmt(a2.totalRec)}</td>
+                  <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic" }}>{fmt(o2.totalRec)}</td>
                   <td className={`num bold ${diffReceita >= 0 ? "green" : "red"}`}>{fmt(diffReceita)}</td>
                   <td className={`num bold ${diffReceita >= 0 ? "green" : "red"}`}>{fmtPct(diffReceitaPct)}</td>
                 </tr>
                 {expanded.Receita && [...allRecCats].sort((x, y) => (a2.recCat.get(y) || 0) + (a1.recCat.get(y) || 0) - ((a2.recCat.get(x) || 0) + (a1.recCat.get(x) || 0))).map((cat, i) => {
                   const v1 = a1.recCat.get(cat) || 0;
                   const v2 = a2.recCat.get(cat) || 0;
+                  const oc1 = o1.recCat.get(cat) || 0;
+                  const oc2 = o2.recCat.get(cat) || 0;
                   const diff = v2 - v1;
                   const pct = safePct(diff, v1);
                   return (
                     <tr key={`r${i}`}>
                       <td style={{ paddingLeft: 24 }}><span className="chev">+</span>{cat}</td>
                       <td className="num green">{v1 !== 0 ? fmt(v1) : "—"}</td>
+                      <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic", fontSize: 12 }}>{oc1 !== 0 ? fmt(oc1) : "—"}</td>
                       <td className="num green">{v2 !== 0 ? fmt(v2) : "—"}</td>
+                      <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic", fontSize: 12 }}>{oc2 !== 0 ? fmt(oc2) : "—"}</td>
                       <td className={`num ${diff >= 0 ? "green" : "red"}`}>{fmt(diff)}</td>
                       <td className={`num ${diff >= 0 ? "green" : "red"}`}>{fmtPct(pct)}</td>
                     </tr>
@@ -834,20 +917,26 @@ const PageComparativo = ({ statusFilter, drilldown, setDrilldown, year, month })
                     </button>
                   </td>
                   <td className="num bold red">{fmt(a1.totalDesp)}</td>
+                  <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic" }}>{fmt(o1.totalDesp)}</td>
                   <td className="num bold red">{fmt(a2.totalDesp)}</td>
+                  <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic" }}>{fmt(o2.totalDesp)}</td>
                   <td className={`num bold ${diffDespesa <= 0 ? "green" : "red"}`}>{fmt(diffDespesa)}</td>
                   <td className={`num bold ${diffDespesa <= 0 ? "green" : "red"}`}>{fmtPct(diffDespesaPct)}</td>
                 </tr>
                 {expanded.Despesa && [...allDespCats].sort((x, y) => (a2.despCat.get(y) || 0) + (a1.despCat.get(y) || 0) - ((a2.despCat.get(x) || 0) + (a1.despCat.get(x) || 0))).map((cat, i) => {
                   const v1 = a1.despCat.get(cat) || 0;
                   const v2 = a2.despCat.get(cat) || 0;
+                  const oc1 = o1.despCat.get(cat) || 0;
+                  const oc2 = o2.despCat.get(cat) || 0;
                   const diff = v2 - v1;
                   const pct = safePct(diff, v1);
                   return (
                     <tr key={`d${i}`}>
                       <td style={{ paddingLeft: 24 }}><span className="chev">+</span>{cat}</td>
                       <td className="num red">{v1 !== 0 ? fmt(v1) : "—"}</td>
+                      <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic", fontSize: 12 }}>{oc1 !== 0 ? fmt(oc1) : "—"}</td>
                       <td className="num red">{v2 !== 0 ? fmt(v2) : "—"}</td>
+                      <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic", fontSize: 12 }}>{oc2 !== 0 ? fmt(oc2) : "—"}</td>
                       <td className={`num ${diff <= 0 ? "green" : "red"}`}>{fmt(diff)}</td>
                       <td className={`num ${diff <= 0 ? "green" : "red"}`}>{fmtPct(pct)}</td>
                     </tr>
@@ -856,12 +945,17 @@ const PageComparativo = ({ statusFilter, drilldown, setDrilldown, year, month })
                 <tr className="total">
                   <td>Total líquido</td>
                   <td className="num">{fmt(a1.liq)}</td>
+                  <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic" }}>{fmt(o1.liq)}</td>
                   <td className="num">{fmt(a2.liq)}</td>
+                  <td className="num" style={{ color: "var(--fg-3)", fontStyle: "italic" }}>{fmt(o2.liq)}</td>
                   <td className={`num ${diffLiq >= 0 ? "green" : "red"}`}>{fmt(diffLiq)}</td>
                   <td className={`num ${diffLiq >= 0 ? "green" : "red"}`}>{fmtPct(diffLiqPct)}</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div className="status-line" style={{ marginTop: 8, fontSize: 11 }}>
+            <b>Orçamento</b> = receita: melhor mês dos 12 meses anteriores ao período · despesa: média mensal dos 12 meses anteriores. Multiplicado por {o1.nMesesP} mês{o1.nMesesP === 1 ? "" : "es"} (P1) / {o2.nMesesP} mês{o2.nMesesP === 1 ? "" : "es"} (P2).
           </div>
         </div>
       </div>
