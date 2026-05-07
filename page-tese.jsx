@@ -1,14 +1,16 @@
-/* PageTese — Ensaio Estatístico Vertical (Buffett + Jobs + Simons)
+/* PageTese v2 — Raio-X Estatístico do GRUPO sobre as Empresas
  *
- * Storytelling progressivo: 10 seções respondendo perguntas em cadeia.
- * Cada seção tem: métrica/viz + insight em destaque + pergunta que levanta a próxima.
- * Filtro de empresa altera toda a história.
+ * Análise por SETOR (4 grupos de negócio), não por loja individual.
+ * Usa ALL_TX completo (todos os meses realizados, não só REF_YEAR).
+ * Termina com lista NOMINAL: vender X/Y/Z + investir em A/B/C.
  *
- * Dados internos: DRE_BY_CONTA, MONTH_DRE, ALL_TX.
- * Dados externos: BCB API (IPCA 433, CDI 12, IBC-Br 24364) — fetch async.
+ * 4 setores:
+ *   Food Delivery (Domino's + Spoleto + Boali) — 15 lojas
+ *   Aeroporto Premium (Bauducco + Bolo de Rolo + Natuzon + Nobel) — 5 lojas
+ *   Óptica (Optcália + Oculum) — 5 lojas
+ *   Outros (Luigi) — 1 loja
  */
 
-// ===== Helpers estatísticos =====
 const _stats = {
   mean: (a) => a.length ? a.reduce((s,x) => s+x, 0) / a.length : 0,
   stdev: (a) => {
@@ -18,10 +20,8 @@ const _stats = {
   },
   cv: (a) => {
     const m = _stats.mean(a);
-    if (Math.abs(m) < 1e-9) return 0;
-    return _stats.stdev(a) / Math.abs(m);
+    return Math.abs(m) < 1e-9 ? 0 : _stats.stdev(a) / Math.abs(m);
   },
-  // Regressão linear simples — retorna slope, intercept, R², SE_slope
   linreg: (xs, ys) => {
     const n = xs.length;
     if (n < 2) return { slope: 0, intercept: 0, r2: 0, se: 0 };
@@ -35,60 +35,36 @@ const _stats = {
     const slope = sxx > 0 ? sxy / sxx : 0;
     const intercept = my - slope * mx;
     const r2 = (sxx > 0 && syy > 0) ? (sxy ** 2) / (sxx * syy) : 0;
-    // Erro padrão do slope
     let sse = 0;
     for (let i = 0; i < n; i++) sse += (ys[i] - (intercept + slope * xs[i])) ** 2;
     const sigma = n > 2 ? Math.sqrt(sse / (n - 2)) : 0;
     const se = sxx > 0 ? sigma / Math.sqrt(sxx) : 0;
-    return { slope, intercept, r2, se };
+    return { slope, intercept, r2, se, sigma };
   },
-  // Pearson
   corr: (xs, ys) => {
     const n = Math.min(xs.length, ys.length);
     if (n < 2) return 0;
-    const mx = _stats.mean(xs), my = _stats.mean(ys);
+    const mx = _stats.mean(xs.slice(0,n)), my = _stats.mean(ys.slice(0,n));
     let num = 0, dx = 0, dy = 0;
     for (let i = 0; i < n; i++) {
       num += (xs[i] - mx) * (ys[i] - my);
       dx += (xs[i] - mx) ** 2;
       dy += (ys[i] - my) ** 2;
     }
-    const denom = Math.sqrt(dx * dy);
-    return denom > 0 ? num / denom : 0;
+    const d = Math.sqrt(dx * dy);
+    return d > 0 ? num / d : 0;
   },
-  // Decomposição simples: trend (regressão linear) + sazonalidade (média do resíduo por mês do ano)
-  decompose: (months, values) => {
-    const n = values.length;
-    const xs = values.map((_,i) => i);
-    const { slope, intercept } = _stats.linreg(xs, values);
-    const trend = xs.map(x => intercept + slope * x);
-    const detrended = values.map((v,i) => v - trend[i]);
-    // Sazonalidade: média do detrended agrupado pelo mês calendário
-    const monthOfYear = months.map(m => parseInt(m.slice(5,7), 10) - 1);
-    const seasonalSum = Array(12).fill(0);
-    const seasonalCnt = Array(12).fill(0);
-    for (let i = 0; i < n; i++) {
-      seasonalSum[monthOfYear[i]] += detrended[i];
-      seasonalCnt[monthOfYear[i]]++;
-    }
-    const seasonal12 = seasonalSum.map((s, i) => seasonalCnt[i] > 0 ? s / seasonalCnt[i] : 0);
-    const seasonal = monthOfYear.map(m => seasonal12[m]);
-    const noise = values.map((v,i) => v - trend[i] - seasonal[i]);
-    return { trend, seasonal, noise, seasonal12, slope, intercept };
-  },
-  // Quantil
   quantile: (a, q) => {
-    if (a.length === 0) return 0;
-    const sorted = a.slice().sort((x,y) => x-y);
-    const idx = q * (sorted.length - 1);
+    if (!a.length) return 0;
+    const s = a.slice().sort((x,y) => x-y);
+    const idx = q * (s.length - 1);
     const lo = Math.floor(idx), hi = Math.ceil(idx);
-    if (lo === hi) return sorted[lo];
-    return sorted[lo] * (hi - idx) + sorted[hi] * (idx - lo);
+    return lo === hi ? s[lo] : s[lo] * (hi - idx) + s[hi] * (idx - lo);
   },
 };
 
-// ===== Seção: card com narrativa =====
-const Secao = ({ numero, titulo, subtitulo, children, insight, pergunta }) => (
+// ===== Card de seção com narrativa =====
+const TeseSecao = ({ numero, titulo, subtitulo, children, insight, pergunta }) => (
   <div className="card" style={{ marginBottom: 24, padding: 28 }}>
     <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
       <span style={{ fontSize: 12, color: "var(--cyan)", fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase" }}>§{String(numero).padStart(2, "0")}</span>
@@ -111,284 +87,345 @@ const Secao = ({ numero, titulo, subtitulo, children, insight, pergunta }) => (
   </div>
 );
 
+const SETORES_ORD = ["Food Delivery", "Aeroporto Premium", "Óptica", "Outros"];
+
 const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
   const REF_YEAR = window.REF_YEAR || new Date().getFullYear();
-  const isContaFilter = drilldown && drilldown.type === 'conta';
-  const contaSlug = isContaFilter ? drilldown.value : null;
-  const contaLabel = contaSlug ? drilldown.label : "Grupo DEX (consolidado)";
-
+  const ALL_TX = window.ALL_TX || [];
   const B = window.BIT || {};
-  const DBC = B.DRE_BY_CONTA || {};
   const CONTAS = B.CONTAS || [];
+  const DBC = B.DRE_BY_CONTA || {};
 
-  // Macro (BCB API) — fetch async
+  // ===== Macro BCB API =====
   const [macro, setMacro] = useState(null);
-  const [macroLoading, setMacroLoading] = useState(true);
   useEffect(() => {
-    setMacroLoading(true);
-    // 433 = IPCA mensal % · 12 = CDI mensal % · 24364 = IBC-Br mensal índice (proxy PIB)
     const series = [
       { id: 433, name: "IPCA" },
       { id: 12, name: "CDI" },
       { id: 24364, name: "IBC-Br" },
     ];
     Promise.all(series.map(s =>
-      fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.${s.id}/dados?formato=json&dataInicial=01/01/2024`)
+      fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.${s.id}/dados?formato=json&dataInicial=01/05/2024`)
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(data => ({ name: s.name, data: (data||[]).map(d => ({ data: d.data, valor: parseFloat(d.valor) })) }))
         .catch(() => ({ name: s.name, data: [] }))
     )).then(results => {
-      const byName = Object.fromEntries(results.map(r => [r.name, r.data]));
-      setMacro(byName);
-      setMacroLoading(false);
-    }).catch(() => setMacroLoading(false));
+      setMacro(Object.fromEntries(results.map(r => [r.name, r.data])));
+    });
   }, []);
 
-  // ===== Dados base da empresa selecionada (ou consolidado) =====
-  const base = useMemo(() => {
-    let dre, label;
-    if (isContaFilter && DBC[contaSlug]) {
-      dre = DBC[contaSlug].MONTH_DRE || [];
-      label = DBC[contaSlug].label || contaLabel;
-    } else {
-      dre = B.MONTH_DRE || [];
-      label = "Grupo DEX (consolidado)";
-    }
-    // Apenas meses ativos
-    const active = dre.filter(m => m.count > 0);
-    const months = active.map((m,i) => `${REF_YEAR}-${String(dre.indexOf(m)+1).padStart(2,'0')}`);
-    const receitas = active.map(m => m.receita);
-    const liquidos = active.map(m => m.liquido);
-    const despesas = active.map(m => m.custo + m.despesa + m.imposto);
-    return { dre, active, months, receitas, liquidos, despesas, label };
-  }, [isContaFilter, contaSlug, DBC, B.MONTH_DRE, REF_YEAR]);
+  // ===== Mapeamento loja → setor =====
+  const lojaSetor = useMemo(() => {
+    const m = {};
+    for (const c of CONTAS) m[c.slug] = window.inferSetor ? window.inferSetor(c.label) : "Outros";
+    return m;
+  }, [CONTAS]);
 
-  // ===== Estatística por loja (todas as 24, pra correlações/Markowitz) =====
-  const perLoja = useMemo(() => {
-    return CONTAS.map(c => {
-      const d = DBC[c.slug];
-      if (!d) return null;
-      const dre = d.MONTH_DRE || [];
-      const active = dre.filter(m => m.count > 0);
-      if (active.length < 2) return null;
-      const receitas = active.map(m => m.receita);
-      const liquidos = active.map(m => m.liquido);
-      const xs = active.map((_,i) => i);
-      const reg = _stats.linreg(xs, receitas);
-      const meanRec = _stats.mean(receitas);
-      const slopePct = meanRec > 0 ? (reg.slope / meanRec) * 100 : 0;
-      const sePct = meanRec > 0 ? (reg.se / meanRec) * 100 : 0;
-      // IC 95%: slope ± 1.96 × SE
+  // ===== ALL_TX agregado por (setor × mês × kind) — usando todos os meses realizados =====
+  const setorMes = useMemo(() => {
+    const out = {};   // setor → { months: Set, recByMes: Map<mes, val>, despByMes: Map<mes, val> }
+    for (const sec of SETORES_ORD) out[sec] = { months: new Set(), recByMes: new Map(), despByMes: new Map() };
+    for (const r of ALL_TX) {
+      if (r[6] !== 1) continue;        // só realizado
+      const mes = r[1];
+      if (!mes) continue;
+      const slug = r[9];
+      const sec = lojaSetor[slug] || "Outros";
+      const o = out[sec];
+      o.months.add(mes);
+      if (r[0] === 'r') o.recByMes.set(mes, (o.recByMes.get(mes)||0) + r[5]);
+      else              o.despByMes.set(mes, (o.despByMes.get(mes)||0) + r[5]);
+    }
+    // Para cada setor, alinha sequência de meses (desde o mais antigo até o mais recente real)
+    const result = {};
+    for (const sec of SETORES_ORD) {
+      const o = out[sec];
+      const months = [...o.months].sort();
+      const rec = months.map(m => o.recByMes.get(m) || 0);
+      const desp = months.map(m => o.despByMes.get(m) || 0);
+      const liq = rec.map((v,i) => v - desp[i]);
+      result[sec] = { months, rec, desp, liq };
+    }
+    return result;
+  }, [ALL_TX, lojaSetor]);
+
+  // ===== Estatísticas por setor =====
+  const setorStats = useMemo(() => {
+    const out = {};
+    for (const sec of SETORES_ORD) {
+      const d = setorMes[sec];
+      if (!d || d.months.length < 2) {
+        out[sec] = { hasData: false };
+        continue;
+      }
+      const xs = d.rec.map((_,i) => i);
+      const reg = _stats.linreg(xs, d.rec);
+      const meanR = _stats.mean(d.rec);
+      const slopePct = meanR > 0 ? (reg.slope / meanR) * 100 : 0;
+      const sePct = meanR > 0 ? (reg.se / meanR) * 100 : 0;
       const ciLo = slopePct - 1.96 * sePct;
       const ciHi = slopePct + 1.96 * sePct;
       const significant = ciLo > 0 || ciHi < 0;
-      return {
-        slug: c.slug, label: c.label,
-        marca: window.inferMarca ? window.inferMarca(c.label) : "—",
-        canal: window.inferCanal ? window.inferCanal(c.label) : "—",
-        receitas, liquidos,
-        meanRec, stdRec: _stats.stdev(receitas), cv: _stats.cv(receitas),
+      // Sazonalidade: média do detrended por mês calendário
+      const trendVals = d.rec.map((_,i) => reg.intercept + reg.slope * i);
+      const detrended = d.rec.map((v,i) => v - trendVals[i]);
+      const monthOfYear = d.months.map(m => parseInt(m.slice(5,7), 10) - 1);
+      const seasSum = Array(12).fill(0), seasCnt = Array(12).fill(0);
+      for (let i = 0; i < d.rec.length; i++) {
+        seasSum[monthOfYear[i]] += detrended[i];
+        seasCnt[monthOfYear[i]]++;
+      }
+      const seasonal12 = seasSum.map((s,i) => seasCnt[i] > 0 ? s / seasCnt[i] : 0);
+      const noise = d.rec.map((v,i) => v - trendVals[i] - (seasonal12[monthOfYear[i]] || 0));
+      // Lojas no setor + receita YTD do setor
+      const lojasNoSetor = (CONTAS || []).filter(c => lojaSetor[c.slug] === sec);
+      const totalRec = d.rec.reduce((s,v) => s+v, 0);
+      const totalLiq = d.liq.reduce((s,v) => s+v, 0);
+      const margem = totalRec > 0 ? (totalLiq / totalRec) * 100 : 0;
+      // Ramp-up: razão receita do último terço vs primeiro terço
+      const n = d.rec.length;
+      let ramp = 1;
+      if (n >= 6) {
+        const tt = Math.floor(n / 3);
+        const r1 = _stats.mean(d.rec.slice(0, tt));
+        const r3 = _stats.mean(d.rec.slice(-tt));
+        ramp = r1 > 0 ? r3 / r1 : 1;
+      }
+      out[sec] = {
+        hasData: true, n, months: d.months, rec: d.rec, desp: d.desp, liq: d.liq,
+        meanR, stdR: _stats.stdev(d.rec), cv: _stats.cv(d.rec),
         slopePct, sePct, ciLo, ciHi, significant, r2: reg.r2,
-        sharpe: _stats.stdev(liquidos) > 0 ? _stats.mean(liquidos) / _stats.stdev(liquidos) : 0,
-        n: active.length,
+        seasonal12, trendVals, noise,
+        lojas: lojasNoSetor, qtdLojas: lojasNoSetor.length,
+        totalRec, totalLiq, margem, ramp,
+        sharpe: _stats.stdev(d.liq) > 0 ? _stats.mean(d.liq) / _stats.stdev(d.liq) : 0,
       };
-    }).filter(Boolean).sort((a,b) => b.meanRec - a.meanRec);
-  }, [CONTAS, DBC]);
-
-  // ===== Decomposição da empresa selecionada =====
-  const decomp = useMemo(() => {
-    if (base.receitas.length < 4) return null;
-    return _stats.decompose(base.months, base.receitas);
-  }, [base]);
-
-  // ===== Forecast Monte Carlo (12 meses futuros) =====
-  const forecast = useMemo(() => {
-    if (!decomp || base.receitas.length < 4) return null;
-    const N_SIMS = 1000;
-    const last = base.receitas.length - 1;
-    const trendLast = decomp.intercept + decomp.slope * last;
-    const noiseStd = _stats.stdev(decomp.noise);
-    const sims = [];
-    for (let s = 0; s < N_SIMS; s++) {
-      const traj = [];
-      for (let h = 1; h <= 12; h++) {
-        const t = trendLast + decomp.slope * h;
-        // próximo mês calendário
-        const lastMonth = parseInt(base.months[last].slice(5,7), 10);
-        const futMonth = ((lastMonth - 1 + h) % 12);
-        const seas = decomp.seasonal12[futMonth] || 0;
-        // ruído aleatório N(0, noiseStd)
-        const u1 = Math.random(), u2 = Math.random();
-        const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-        const noise = z * noiseStd;
-        traj.push(Math.max(0, t + seas + noise));
-      }
-      sims.push(traj);
-    }
-    // Para cada mês futuro, calcula quantis
-    const summary = [];
-    for (let h = 0; h < 12; h++) {
-      const vals = sims.map(s => s[h]);
-      summary.push({
-        h: h+1,
-        p05: _stats.quantile(vals, 0.05),
-        p50: _stats.quantile(vals, 0.50),
-        p95: _stats.quantile(vals, 0.95),
-        mean: _stats.mean(vals),
-      });
-    }
-    // Total ano projetado
-    const annualSums = sims.map(s => s.reduce((a,b) => a+b, 0));
-    return {
-      summary,
-      annualP05: _stats.quantile(annualSums, 0.05),
-      annualP50: _stats.quantile(annualSums, 0.50),
-      annualP95: _stats.quantile(annualSums, 0.95),
-      probPositivo: annualSums.filter(s => s > 0).length / N_SIMS * 100,
-    };
-  }, [decomp, base]);
-
-  // ===== Correlação inter-empresas =====
-  const corrMatrix = useMemo(() => {
-    if (perLoja.length < 2) return null;
-    // Alinha por número de meses (usa só lojas com mesma quantidade)
-    const minN = Math.min(...perLoja.map(p => p.receitas.length));
-    if (minN < 3) return null;
-    const subset = perLoja.filter(p => p.receitas.length >= minN).slice(0, 24);
-    const M = subset.length;
-    const matrix = Array(M).fill().map(() => Array(M).fill(0));
-    for (let i = 0; i < M; i++) {
-      for (let j = 0; j < M; j++) {
-        const xs = subset[i].receitas.slice(-minN);
-        const ys = subset[j].receitas.slice(-minN);
-        matrix[i][j] = _stats.corr(xs, ys);
-      }
-    }
-    return { labels: subset.map(s => s.label), matrix, n: minN };
-  }, [perLoja]);
-
-  // ===== Beta vs portfólio =====
-  const betas = useMemo(() => {
-    if (perLoja.length < 2) return null;
-    const minN = Math.min(...perLoja.map(p => p.receitas.length));
-    if (minN < 3) return null;
-    // Receita do grupo = soma das lojas com pelo menos minN meses
-    const subset = perLoja.filter(p => p.receitas.length >= minN);
-    const groupRec = Array(minN).fill(0);
-    for (const p of subset) {
-      const rec = p.receitas.slice(-minN);
-      for (let i = 0; i < minN; i++) groupRec[i] += rec[i];
-    }
-    return subset.map(p => {
-      const rec = p.receitas.slice(-minN);
-      // Beta = cov(loja, grupo) / var(grupo)
-      const reg = _stats.linreg(groupRec, rec);
-      return { ...p, beta: reg.slope * (_stats.mean(groupRec) / Math.max(1, p.meanRec)), betaR2: reg.r2 };
-    });
-  }, [perLoja]);
-
-  // ===== Capacidade de absorção / saturação =====
-  const saturacao = useMemo(() => {
-    if (!perLoja.length) return null;
-    // Curva: receita média mensal vs nº de meses ativos (proxy de "idade")
-    // Lojas maduras = alta receita + baixa variação. Lojas em ramp = receita crescente.
-    return perLoja.map(p => {
-      // Ratio receita_ultimo_terco / receita_primeiro_terco — se >> 1, está acelerando
-      const n = p.receitas.length;
-      if (n < 3) return { ...p, ramp: 1, status: "imaturo" };
-      const t1 = _stats.mean(p.receitas.slice(0, Math.ceil(n/3)));
-      const t3 = _stats.mean(p.receitas.slice(-Math.ceil(n/3)));
-      const ramp = t1 > 0 ? t3 / t1 : 1;
-      let status;
-      if (ramp > 1.3) status = "acelerando";
-      else if (ramp < 0.7) status = "decaindo";
-      else status = "maduro";
-      return { ...p, ramp, status };
-    });
-  }, [perLoja]);
-
-  // ===== Realocação ótima (ranking Sharpe) =====
-  const realocacao = useMemo(() => {
-    if (!perLoja.length) return null;
-    const sorted = perLoja.slice().filter(p => Number.isFinite(p.sharpe)).sort((a,b) => b.sharpe - a.sharpe);
-    const totalRec = sorted.reduce((s,p) => s + p.meanRec, 0);
-    // Peso atual = receita média / total
-    // Peso ótimo proporcional a Sharpe positivo (truncado em 0)
-    const sumSharpe = sorted.reduce((s,p) => s + Math.max(0, p.sharpe), 0) || 1;
-    return sorted.map(p => ({
-      ...p,
-      pesoAtual: totalRec > 0 ? (p.meanRec / totalRec) * 100 : 0,
-      pesoOtimo: (Math.max(0, p.sharpe) / sumSharpe) * 100,
-    })).map(p => ({ ...p, delta: p.pesoOtimo - p.pesoAtual }));
-  }, [perLoja]);
-
-  // ===== Macro: correlação com receita do grupo =====
-  const macroCorr = useMemo(() => {
-    if (!macro || !base.receitas || base.receitas.length < 3) return null;
-    const out = {};
-    for (const [name, series] of Object.entries(macro)) {
-      if (!series.length) continue;
-      // Alinha pelas datas de base.months (YYYY-MM)
-      const seriesByYM = {};
-      for (const d of series) {
-        const [day, mo, y] = d.data.split("/");
-        seriesByYM[`${y}-${mo}`] = d.valor;
-      }
-      const aligned = base.months.map(m => seriesByYM[m]).filter(v => v != null);
-      const recAligned = base.months.map((m,i) => seriesByYM[m] != null ? base.receitas[i] : null).filter(v => v != null);
-      if (aligned.length < 3) continue;
-      out[name] = _stats.corr(aligned, recAligned);
     }
     return out;
-  }, [macro, base]);
+  }, [setorMes, CONTAS, lojaSetor]);
 
-  // ===== Renderização das visualizações =====
+  // ===== Estatística por loja (pra veredito final) =====
+  const lojaStats = useMemo(() => {
+    return (CONTAS || []).map(c => {
+      const sec = lojaSetor[c.slug];
+      // Pega receita mensal da loja a partir de ALL_TX (não só MONTH_DRE 2026)
+      const recByMes = new Map(), despByMes = new Map();
+      for (const r of ALL_TX) {
+        if (r[6] !== 1 || r[9] !== c.slug) continue;
+        const m = r[1]; if (!m) continue;
+        if (r[0] === 'r') recByMes.set(m, (recByMes.get(m)||0) + r[5]);
+        else despByMes.set(m, (despByMes.get(m)||0) + r[5]);
+      }
+      const months = [...new Set([...recByMes.keys(), ...despByMes.keys()])].sort();
+      if (months.length < 2) return null;
+      const rec = months.map(m => recByMes.get(m) || 0);
+      const desp = months.map(m => despByMes.get(m) || 0);
+      const liq = rec.map((v,i) => v - desp[i]);
+      const xs = months.map((_,i) => i);
+      const reg = _stats.linreg(xs, rec);
+      const meanR = _stats.mean(rec);
+      const slopePct = meanR > 0 ? (reg.slope / meanR) * 100 : 0;
+      const sePct = meanR > 0 ? (reg.se / meanR) * 100 : 0;
+      const ciLo = slopePct - 1.96 * sePct;
+      const ciHi = slopePct + 1.96 * sePct;
+      const significant = ciLo > 0 || ciHi < 0;
+      const totalRec = rec.reduce((a,b)=>a+b, 0);
+      const totalLiq = liq.reduce((a,b)=>a+b, 0);
+      const margem = totalRec > 0 ? (totalLiq / totalRec) * 100 : 0;
+      const sharpe = _stats.stdev(liq) > 0 ? _stats.mean(liq) / _stats.stdev(liq) : 0;
+      let ramp = 1;
+      if (months.length >= 6) {
+        const tt = Math.floor(months.length / 3);
+        const r1 = _stats.mean(rec.slice(0, tt));
+        const r3 = _stats.mean(rec.slice(-tt));
+        ramp = r1 > 0 ? r3 / r1 : 1;
+      }
+      return {
+        slug: c.slug, label: c.label, setor: sec,
+        n: months.length, meanR, totalRec, totalLiq, margem, slopePct, ciLo, ciHi, significant,
+        sharpe, ramp, cv: _stats.cv(rec),
+      };
+    }).filter(Boolean);
+  }, [CONTAS, ALL_TX, lojaSetor]);
+
+  // ===== Vereditos: ranking nominal =====
+  const vereditos = useMemo(() => {
+    if (!lojaStats.length) return { vender: [], investir: [] };
+    // Score VENDA: alto = más
+    //   slope_significativamente_negativo: +30
+    //   margem < 0: + (margem/-1) (até 30)
+    //   sharpe < 0: + (-sharpe * 10, max 20)
+    //   ramp < 0.7: +20
+    // Score INVESTIR: alto = bom
+    //   slope_significativamente_positivo: +30
+    //   margem positiva alta: + (margem * 1)
+    //   sharpe > 0.5: + (sharpe * 10, max 30)
+    //   ramp > 1.3: +20
+    const enriched = lojaStats.map(p => {
+      let scV = 0, scI = 0;
+      if (p.significant && p.slopePct < 0) scV += 30;
+      if (p.significant && p.slopePct > 0) scI += 30;
+      if (p.margem < 0) scV += Math.min(30, -p.margem);
+      if (p.margem > 0) scI += Math.min(30, p.margem);
+      if (p.sharpe < 0) scV += Math.min(20, -p.sharpe * 10);
+      if (p.sharpe > 0.3) scI += Math.min(30, p.sharpe * 10);
+      if (p.ramp < 0.7) scV += 20;
+      if (p.ramp > 1.3) scI += 20;
+      // CV alto pune ambos
+      if (p.cv > 0.5) { scV += 5; scI -= 5; }
+      return { ...p, scoreVender: scV, scoreInvestir: scI };
+    });
+    return {
+      vender: enriched.slice().sort((a,b) => b.scoreVender - a.scoreVender).filter(p => p.scoreVender >= 30).slice(0, 6),
+      investir: enriched.slice().sort((a,b) => b.scoreInvestir - a.scoreInvestir).filter(p => p.scoreInvestir >= 25).slice(0, 6),
+    };
+  }, [lojaStats]);
+
+  // ===== Forecast Monte Carlo por setor (12 meses) =====
+  const forecastSetor = useMemo(() => {
+    const out = {};
+    const N_SIMS = 500;
+    for (const sec of SETORES_ORD) {
+      const s = setorStats[sec];
+      if (!s || !s.hasData || s.n < 4) { out[sec] = null; continue; }
+      const last = s.n - 1;
+      const trendLast = s.trendVals[last];
+      const noiseStd = _stats.stdev(s.noise);
+      const annual = [];
+      for (let k = 0; k < N_SIMS; k++) {
+        let total = 0;
+        for (let h = 1; h <= 12; h++) {
+          const t = trendLast + (s.slopePct/100 * s.meanR) * h; // slope absoluto recuperado
+          const lastM = parseInt(s.months[last].slice(5,7), 10);
+          const futM = ((lastM - 1 + h) % 12);
+          const seas = s.seasonal12[futM] || 0;
+          const u1 = Math.random(), u2 = Math.random();
+          const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+          total += Math.max(0, t + seas + z * noiseStd);
+        }
+        annual.push(total);
+      }
+      out[sec] = {
+        p05: _stats.quantile(annual, 0.05),
+        p50: _stats.quantile(annual, 0.50),
+        p95: _stats.quantile(annual, 0.95),
+      };
+    }
+    return out;
+  }, [setorStats]);
+
+  // ===== Correlação entre setores =====
+  const corrInter = useMemo(() => {
+    const setoresComDado = SETORES_ORD.filter(s => setorStats[s] && setorStats[s].hasData);
+    // Encontra interseção de meses
+    if (!setoresComDado.length) return null;
+    const monthSets = setoresComDado.map(s => new Set(setorStats[s].months));
+    const commonMonths = [...monthSets[0]].filter(m => monthSets.every(set => set.has(m))).sort();
+    if (commonMonths.length < 3) return null;
+    const matrix = [];
+    for (let i = 0; i < setoresComDado.length; i++) {
+      const row = [];
+      for (let j = 0; j < setoresComDado.length; j++) {
+        const xs = commonMonths.map(m => setorStats[setoresComDado[i]].rec[setorStats[setoresComDado[i]].months.indexOf(m)]);
+        const ys = commonMonths.map(m => setorStats[setoresComDado[j]].rec[setorStats[setoresComDado[j]].months.indexOf(m)]);
+        row.push(_stats.corr(xs, ys));
+      }
+      matrix.push(row);
+    }
+    return { setores: setoresComDado, matrix, n: commonMonths.length };
+  }, [setorStats]);
+
+  // ===== Macro corr (receita de cada setor vs séries macro) =====
+  const macroCorr = useMemo(() => {
+    if (!macro) return null;
+    const out = {};
+    for (const sec of SETORES_ORD) {
+      const s = setorStats[sec];
+      if (!s || !s.hasData) continue;
+      out[sec] = {};
+      for (const [name, series] of Object.entries(macro)) {
+        const seriesByYM = {};
+        for (const d of series) {
+          const [day, mo, y] = d.data.split("/");
+          seriesByYM[`${y}-${mo}`] = d.valor;
+        }
+        const aligned = s.months.map((m,i) => ({ rec: s.rec[i], macro: seriesByYM[m] })).filter(x => x.macro != null);
+        if (aligned.length < 3) continue;
+        out[sec][name] = _stats.corr(aligned.map(a => a.rec), aligned.map(a => a.macro));
+      }
+    }
+    return out;
+  }, [macro, setorStats]);
+
   const fmtCompactNum = (n) => window.fmtCompact ? window.fmtCompact(n) : "R$ " + Math.round(n);
   const fmtPctSig = (n, dec=1) => (n>=0?"+":"") + (n||0).toFixed(dec).replace(".",",") + "%";
 
-  // === Viz: linha simples com banda IC ===
-  const LineWithBand = ({ data, height = 200, label = "" }) => {
-    if (!data || data.length === 0) return null;
-    const W = 720, ml = 60, mr = 14, mt = 14, mb = 30;
+  // ===== Charts =====
+  const TrajetoriaChart = ({ data, height = 240 }) => {
+    // data: { setor: { months: [], rec: [] } }
+    const setores = SETORES_ORD.filter(s => data[s] && data[s].hasData);
+    if (setores.length === 0) return <div style={{color:"var(--fg-3)"}}>Sem dados.</div>;
+    // Une todos os meses
+    const allMonths = [...new Set(setores.flatMap(s => data[s].months))].sort();
+    if (allMonths.length < 2) return null;
+    const W = 760, ml = 56, mr = 18, mt = 14, mb = 36;
     const cw = W - ml - mr, ch = height - mt - mb;
-    const allVals = data.flatMap(d => [d.lo, d.hi, d.mid]).filter(v => v != null);
-    const minV = Math.min(...allVals);
-    const maxV = Math.max(...allVals);
-    const range = (maxV - minV) || 1;
-    const x = (i) => ml + (i / Math.max(1, data.length-1)) * cw;
+    // Normaliza pra índice 100 = primeiro mês de cada setor
+    const norm = {};
+    for (const s of setores) {
+      const series = data[s];
+      const base = series.rec[0] || 1;
+      norm[s] = allMonths.map(m => {
+        const idx = series.months.indexOf(m);
+        return idx === -1 ? null : (series.rec[idx] / base) * 100;
+      });
+    }
+    const allVals = setores.flatMap(s => norm[s]).filter(v => v != null);
+    const minV = Math.min(...allVals, 80);
+    const maxV = Math.max(...allVals, 120);
+    const range = maxV - minV || 1;
+    const x = (i) => ml + (i / Math.max(1, allMonths.length-1)) * cw;
     const y = (v) => mt + ch - ((v - minV) / range) * ch;
-    const midPath = data.map((d,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(d.mid).toFixed(1)}`).join(' ');
-    const bandPath = data.map((d,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(d.hi).toFixed(1)}`).join(' ')
-      + ' ' + data.slice().reverse().map((d,i) => `L${x(data.length-1-i).toFixed(1)},${y(d.lo).toFixed(1)}`).join(' ') + ' Z';
     return (
       <div style={{ width: "100%", maxWidth: W }}>
         <svg viewBox={`0 0 ${W} ${height}`} style={{ display: "block", width: "100%", height: "auto" }}>
-          {[0, 0.25, 0.5, 0.75, 1].map(p => {
-            const v = minV + p * range;
-            return (<g key={p}>
-              <line x1={ml} y1={y(v)} x2={W-mr} y2={y(v)} stroke="var(--border)" strokeDasharray="3,3" />
-              <text x={ml-5} y={y(v)+3} textAnchor="end" fontSize="10" fill="var(--fg-3)">{fmtCompactNum(v)}</text>
-            </g>);
+          {[minV, 100, maxV].map(v => (
+            <g key={v}>
+              <line x1={ml} y1={y(v)} x2={W-mr} y2={y(v)} stroke="var(--border)" strokeDasharray={v===100?"4,2":"3,3"} strokeWidth={v===100?1.5:0.7} />
+              <text x={ml-5} y={y(v)+3} textAnchor="end" fontSize="10" fill="var(--fg-3)">{v.toFixed(0)}</text>
+            </g>
+          ))}
+          {setores.map(s => {
+            const color = window.colorForSetor ? window.colorForSetor(s) : "#22d3ee";
+            const pts = norm[s].map((v,i) => v == null ? null : [x(i), y(v)]).filter(Boolean);
+            if (pts.length < 2) return null;
+            const path = pts.map((p,i) => `${i===0?'M':'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+            return <path key={s} d={path} fill="none" stroke={color} strokeWidth={2.5} />;
           })}
-          <path d={bandPath} fill="var(--cyan)" opacity={0.15} />
-          <path d={midPath} fill="none" stroke="var(--cyan)" strokeWidth={2} />
-          {data.map((d,i) => i % 2 === 0 ? (
-            <text key={i} x={x(i)} y={height-8} textAnchor="middle" fontSize="9" fill="var(--fg-3)">{(d.label||"").slice(0,7)}</text>
+          {allMonths.map((m,i) => i % Math.max(1, Math.floor(allMonths.length/8)) === 0 ? (
+            <text key={m} x={x(i)} y={height-8} textAnchor="middle" fontSize="9" fill="var(--fg-3)">{m.slice(2)}</text>
           ) : null)}
         </svg>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 8, justifyContent: "center", fontSize: 12 }}>
+          {setores.map(s => (
+            <span key={s} style={{ color: "var(--fg-2)" }}>
+              <span style={{ display: "inline-block", width: 14, height: 3, background: window.colorForSetor(s), verticalAlign: "middle", marginRight: 5 }} />
+              {s}
+            </span>
+          ))}
+        </div>
       </div>
     );
   };
 
-  // === Heatmap correlação simplificado ===
-  const HeatmapCorr = ({ matrix, labels, height = 460 }) => {
-    if (!matrix) return <div style={{ color: "var(--fg-3)", fontSize: 12 }}>Dados insuficientes</div>;
+  // Heatmap correlação setores
+  const CorrSet = ({ matrix, labels }) => {
+    if (!matrix || !matrix.length) return null;
     const M = matrix.length;
-    const W = 720;
-    const cell = Math.min((W - 100) / M, (height - 80) / M);
-    const tot = cell * M;
+    const W = 720, H = 240, padL = 130, padT = 30;
+    const cell = Math.min((W - padL - 20) / M, (H - padT - 20) / M);
     const colorFor = (v) => {
-      const t = (v + 1) / 2; // -1..1 → 0..1
+      const t = (v + 1) / 2;
       const r = Math.round(239 * (1-t) + 16 * t);
       const g = Math.round(68 * (1-t) + 185 * t);
       const b = Math.round(68 * (1-t) + 129 * t);
@@ -396,464 +433,390 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
     };
     return (
       <div style={{ width: "100%", maxWidth: W }}>
-        <svg viewBox={`0 0 ${W} ${height}`} style={{ display: "block", width: "100%", height: "auto" }}>
-          {matrix.map((row, i) => row.map((v, j) => (
-            <rect key={`${i}-${j}`} x={100 + j*cell} y={20 + i*cell} width={cell-1} height={cell-1}
-              fill={colorFor(v)} opacity={0.85}>
-              <title>{`${labels[i]} × ${labels[j]}: ${v.toFixed(2)}`}</title>
-            </rect>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", height: "auto" }}>
+          {matrix.map((row,i) => row.map((v,j) => (
+            <g key={`${i}-${j}`}>
+              <rect x={padL + j*cell} y={padT + i*cell} width={cell-2} height={cell-2}
+                fill={colorFor(v)} opacity={0.9} />
+              <text x={padL + j*cell + cell/2} y={padT + i*cell + cell/2 + 4}
+                textAnchor="middle" fontSize="13" fontWeight="700" fill="white">{v.toFixed(2)}</text>
+            </g>
           )))}
           {labels.map((lb, i) => (
-            <text key={i} x={95} y={20 + i*cell + cell/2 + 3} textAnchor="end" fontSize="9" fill="var(--fg-2)">
-              {lb.length > 16 ? lb.slice(0,14)+"…" : lb}
-            </text>
+            <text key={"r"+i} x={padL - 8} y={padT + i*cell + cell/2 + 4} textAnchor="end" fontSize="11" fill="var(--fg-2)">{lb}</text>
           ))}
-          {/* Legenda */}
-          <text x={W-100} y={height-30} fontSize="10" fill="var(--fg-3)">−1 (oposta)</text>
-          <text x={W-100} y={height-15} fontSize="10" fill="var(--fg-3)">+1 (idêntica)</text>
+          {labels.map((lb, j) => (
+            <text key={"c"+j} x={padL + j*cell + cell/2} y={padT - 8} textAnchor="middle" fontSize="11" fill="var(--fg-2)">{lb.slice(0,8)}</text>
+          ))}
         </svg>
       </div>
     );
   };
 
-  // ===== Métricas pra capa =====
-  const meanRec = _stats.mean(base.receitas);
-  const stdRec = _stats.stdev(base.receitas);
-  const cvRec = _stats.cv(base.receitas);
-  const cvPct = (cvRec * 100).toFixed(0);
-  const previsibilidade = cvRec < 0.2 ? "previsível" : cvRec < 0.5 ? "moderada" : "volátil";
-  const slopePct = base.receitas.length >= 2
-    ? (_stats.linreg(base.receitas.map((_,i)=>i), base.receitas).slope / Math.max(1, meanRec) * 100)
-    : 0;
+  // ===== KPIs do grupo (todos meses, todos setores) =====
+  const grupoTotal = useMemo(() => {
+    let totalRec = 0, totalLiq = 0, nMonths = new Set();
+    for (const sec of SETORES_ORD) {
+      const s = setorStats[sec];
+      if (!s || !s.hasData) continue;
+      totalRec += s.totalRec;
+      totalLiq += s.totalLiq;
+      for (const m of s.months) nMonths.add(m);
+    }
+    return { totalRec, totalLiq, margem: totalRec > 0 ? (totalLiq/totalRec)*100 : 0, nMonths: nMonths.size };
+  }, [setorStats]);
 
   return (
     <div className="page" style={{ maxWidth: 920, margin: "0 auto", padding: "20px 16px" }}>
       <header style={{ marginBottom: 36, paddingBottom: 24, borderBottom: "2px solid var(--cyan)" }}>
-        <div style={{ fontSize: 11, color: "var(--cyan)", letterSpacing: "0.3em", fontWeight: 700, marginBottom: 12 }}>TESE ESTATÍSTICA · {REF_YEAR}</div>
-        <h1 style={{ fontSize: 36, fontWeight: 800, margin: 0, lineHeight: 1.1 }}>{base.label}</h1>
+        <div style={{ fontSize: 11, color: "var(--cyan)", letterSpacing: "0.3em", fontWeight: 700, marginBottom: 12 }}>RAIO-X DO GRUPO · {grupoTotal.nMonths} MESES OBSERVADOS</div>
+        <h1 style={{ fontSize: 36, fontWeight: 800, margin: 0, lineHeight: 1.1 }}>Você não tem 24 lojas.<br/>Você tem 3 negócios diferentes.</h1>
         <p style={{ color: "var(--fg-2)", fontSize: 16, marginTop: 16, lineHeight: 1.6 }}>
-          Operação <b style={{ color: cvRec < 0.2 ? "var(--green)" : cvRec < 0.5 ? "var(--cyan)" : "var(--red)" }}>{previsibilidade}</b> com receita média mensal de <b>{fmtCompactNum(meanRec)}</b>, desvio padrão de <b>{fmtCompactNum(stdRec)}</b> ({cvPct}% do nível típico) e tendência de <b style={{ color: slopePct >= 0 ? "var(--green)" : "var(--red)" }}>{fmtPctSig(slopePct)}/mês</b>.
+          O Grupo DEX opera em <b>4 setores</b> (Food Delivery, Aeroporto Premium, Óptica e Outros) com perfis estatísticos opostos.
+          Receita consolidada de <b>{fmtCompactNum(grupoTotal.totalRec)}</b>, líquido de <b style={{color: grupoTotal.totalLiq >= 0 ? "var(--green)" : "var(--red)"}}>{fmtCompactNum(grupoTotal.totalLiq)}</b>, margem <b>{grupoTotal.margem.toFixed(1).replace(".",",")}%</b>.
+          Esta tese decompõe a operação por <b>setor</b>, identifica onde está o valor (e onde está o sangramento), e termina com <b>lista nominal de lojas a vender e a investir</b>.
         </p>
-        <p style={{ color: "var(--fg-3)", fontSize: 13, marginTop: 8, fontStyle: "italic" }}>
-          "Não é o que você sabe que te mete em encrenca. É o que você acha que sabe e não é assim." — Mark Twain. As próximas 10 seções decompõem o que você acha que sabe sobre essa operação.
-        </p>
-        {!isContaFilter && CONTAS.length > 0 && (
-          <div style={{ marginTop: 16, padding: "10px 14px", background: "rgba(34,211,238,0.06)", borderRadius: 6, fontSize: 12, color: "var(--fg-2)" }}>
-            💡 Filtre uma empresa no header pra ver a tese aplicada a uma loja específica.
-          </div>
-        )}
       </header>
 
-      {/* §01 — Capa de previsibilidade */}
-      <Secao numero={1}
-        titulo="Quanto você pode confiar nessa receita?"
-        subtitulo="Toda análise começa pelo coeficiente de variação. Receita previsível vale múltiplo. Receita volátil tem desconto."
-        insight={
-          <>
-            CV = {cvPct}%. Em varejo maduro, CV abaixo de 20% é raro e merece prêmio. Acima de 50% sinaliza dependência de eventos pontuais (festas, picos, marketing). Esta operação é <b>{previsibilidade}</b>.
-          </>
-        }
-        pergunta="OK, mas a receita varia por causa de tendência (boa ou ruim) ou só ruído? Vamos decompor."
-      >
-        <div className="kpi-row" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-          <KpiTile tone="cyan" label="Receita média / mês" value={fmtCompactNum(meanRec)} hint={`${base.active.length} meses observados`} />
-          <KpiTile tone="amber" label="Desvio padrão" value={fmtCompactNum(stdRec)} hint={`σ — flutuação típica em torno da média`} />
-          <KpiTile tone={cvRec < 0.2 ? "green" : cvRec < 0.5 ? "cyan" : "red"} label="CV (σ / média)" value={cvPct + "%"} nonMonetary hint={previsibilidade} />
-        </div>
-      </Secao>
-
-      {/* §02 — Decomposição */}
-      {decomp && (
-        <Secao numero={2}
-          titulo="Tendência, sazonalidade e ruído"
-          subtitulo="Toda série temporal se decompõe em três pedaços. Saber qual domina muda a estratégia."
-          insight={
-            <>
-              {(() => {
-                const trendVar = _stats.stdev(decomp.trend);
-                const seasVar = _stats.stdev(decomp.seasonal);
-                const noiseVar = _stats.stdev(decomp.noise);
-                const tot = trendVar + seasVar + noiseVar || 1;
-                const dom = trendVar > seasVar && trendVar > noiseVar ? "tendência"
-                  : seasVar > noiseVar ? "sazonalidade" : "ruído";
-                return <>O componente dominante aqui é <b>{dom}</b>. Tendência = <b>{((trendVar/tot)*100).toFixed(0)}%</b> · sazonalidade = <b>{((seasVar/tot)*100).toFixed(0)}%</b> · ruído = <b>{((noiseVar/tot)*100).toFixed(0)}%</b>. Quanto mais ruído, menor a confiança em qualquer projeção pontual.</>;
-              })()}
-            </>
-          }
-          pergunta="Se há sazonalidade, qual é o calendário ideal? Quando esperar pico, quando vale, e isso é estável?"
-        >
-          <div style={{ background: "var(--bg)", padding: 12, borderRadius: 8 }}>
-            {(() => {
-              const W = 720, h = 200, ml = 60, mr = 14, mt = 14, mb = 30;
-              const cw = W - ml - mr, ch = h - mt - mb;
-              const all = [...base.receitas, ...decomp.trend, ...decomp.seasonal.map((s,i) => s + decomp.trend[i])];
-              const minV = Math.min(...all);
-              const maxV = Math.max(...all);
-              const range = (maxV - minV) || 1;
-              const x = (i) => ml + (i / Math.max(1, base.receitas.length-1)) * cw;
-              const y = (v) => mt + ch - ((v - minV) / range) * ch;
-              const realPath = base.receitas.map((v,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-              const trendPath = decomp.trend.map((v,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-              const trendSeasPath = decomp.trend.map((t,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(t + decomp.seasonal[i]).toFixed(1)}`).join(' ');
-              return (
-                <svg viewBox={`0 0 ${W} ${h}`} style={{ display: "block", width: "100%", height: "auto" }}>
-                  <path d={realPath} fill="none" stroke="var(--cyan)" strokeWidth={2.5} />
-                  <path d={trendPath} fill="none" stroke="var(--amber)" strokeWidth={1.5} strokeDasharray="6,3" />
-                  <path d={trendSeasPath} fill="none" stroke="var(--green)" strokeWidth={1.2} strokeDasharray="2,3" />
-                </svg>
-              );
-            })()}
-            <div style={{ display: "flex", gap: 16, fontSize: 11, color: "var(--fg-2)", marginTop: 8, justifyContent: "center", flexWrap: "wrap" }}>
-              <span><span style={{ display: "inline-block", width: 14, height: 2, background: "var(--cyan)", verticalAlign: "middle", marginRight: 5 }} />Receita real</span>
-              <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "1.5px dashed var(--amber)", verticalAlign: "middle", marginRight: 5 }} />Tendência (regressão)</span>
-              <span><span style={{ display: "inline-block", width: 14, height: 0, borderTop: "1.2px dashed var(--green)", verticalAlign: "middle", marginRight: 5 }} />Tendência + sazonalidade</span>
-            </div>
-          </div>
-        </Secao>
-      )}
-
-      {/* §03 — Sazonalidade calendário */}
-      {decomp && (
-        <Secao numero={3}
-          titulo="O calendário oculto"
-          subtitulo="Padrão sazonal médio (resíduo após retirar tendência), agrupado por mês do ano."
-          insight={
-            <>
-              {(() => {
-                const max = Math.max(...decomp.seasonal12);
-                const min = Math.min(...decomp.seasonal12);
-                const peakIdx = decomp.seasonal12.indexOf(max);
-                const valeIdx = decomp.seasonal12.indexOf(min);
-                const months_pt = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
-                return <>Pico sazonal em <b>{months_pt[peakIdx]}</b> ({fmtCompactNum(max)} acima da tendência). Vale em <b>{months_pt[valeIdx]}</b> ({fmtCompactNum(min)}). Diferença pico-vale: <b>{fmtCompactNum(max-min)}</b> — esse é o "tax" que o calendário cobra da sua operação.</>;
-              })()}
-            </>
-          }
-          pergunta="Mas com poucos meses de histórico, esse padrão é real ou é coincidência? Precisa de teste estatístico."
-        >
-          <div style={{ background: "var(--bg)", padding: 12, borderRadius: 8 }}>
-            {(() => {
-              const W = 720, h = 160, ml = 60, mr = 14, mt = 14, mb = 30;
-              const cw = W - ml - mr, ch = h - mt - mb;
-              const max = Math.max(...decomp.seasonal12.map(Math.abs));
-              const slot = cw / 12;
-              const months_pt = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
-              return (
-                <svg viewBox={`0 0 ${W} ${h}`} style={{ display: "block", width: "100%", height: "auto" }}>
-                  <line x1={ml} y1={mt+ch/2} x2={W-mr} y2={mt+ch/2} stroke="var(--fg-3)" />
-                  {decomp.seasonal12.map((v,i) => {
-                    const xPos = ml + i*slot + slot*0.15;
-                    const barW = slot * 0.7;
-                    const hBar = Math.abs(v) / Math.max(1, max) * (ch/2 - 6);
-                    const yTop = v >= 0 ? mt+ch/2 - hBar : mt+ch/2;
-                    return (
-                      <g key={i}>
-                        <rect x={xPos} y={yTop} width={barW} height={hBar} fill={v >= 0 ? "var(--green)" : "var(--red)"} opacity={0.75} rx={2} />
-                        <text x={xPos + barW/2} y={h-8} textAnchor="middle" fontSize="10" fill="var(--fg-3)">{months_pt[i]}</text>
-                      </g>
-                    );
-                  })}
-                </svg>
-              );
-            })()}
-          </div>
-        </Secao>
-      )}
-
-      {/* §04 — Significância do crescimento */}
-      <Secao numero={4}
-        titulo="O crescimento é real ou é vento?"
-        subtitulo="IC 95% sobre a inclinação da regressão. Se o intervalo cruza zero, não dá pra afirmar tendência."
+      {/* §01 — Anatomia setorial */}
+      <TeseSecao numero={1}
+        titulo="Anatomia do grupo: 4 negócios, 4 perfis"
+        subtitulo="A análise que importa começa pelo setor — não pela loja individual. Aqui a tabela mostra os 4 negócios lado a lado."
         insight={
           <>
             {(() => {
-              if (perLoja.length === 0) return "Sem dados por loja.";
-              const sig = perLoja.filter(p => p.significant);
-              const cresc = sig.filter(p => p.slopePct > 0);
-              const decai = sig.filter(p => p.slopePct < 0);
-              const ind = perLoja.length - sig.length;
-              return <>Das {perLoja.length} lojas, <b>{cresc.length}</b> mostram <b style={{color:"var(--green)"}}>crescimento estatisticamente significativo</b>, <b>{decai.length}</b> mostram <b style={{color:"var(--red)"}}>queda significativa</b>, e <b>{ind}</b> são <b>indistinguíveis de ruído</b>. Esse último grupo é onde gestão julga sem dado pra apoiar.</>;
+              const ss = SETORES_ORD.map(s => setorStats[s]).filter(s => s && s.hasData);
+              if (!ss.length) return "Sem dados suficientes.";
+              const margens = ss.map(s => s.margem);
+              const setorMaiorMargem = SETORES_ORD.find(s => setorStats[s]?.margem === Math.max(...margens));
+              const setorMenorMargem = SETORES_ORD.find(s => setorStats[s]?.margem === Math.min(...margens));
+              return <>O setor com <b>maior margem</b> é <b style={{color:window.colorForSetor(setorMaiorMargem)}}>{setorMaiorMargem}</b> ({setorStats[setorMaiorMargem].margem.toFixed(1).replace(".",",")}%). O com <b>maior sangramento</b> é <b style={{color:"var(--red)"}}>{setorMenorMargem}</b> ({setorStats[setorMenorMargem].margem.toFixed(1).replace(".",",")}%). Diferença entre os extremos: <b>{(Math.max(...margens) - Math.min(...margens)).toFixed(1).replace(".",",")}pp</b>. Esse spread é onde mora a oportunidade.</>;
             })()}
           </>
         }
-        pergunta="OK, sabemos quem cresce e quem cai. Mas elas se movem juntas? Há alguma loja antifrágil?"
+        pergunta="Mas margem média esconde direção. Será que algum setor está acelerando ou desacelerando?"
       >
-        <div className="t-scroll" style={{ overflowX: "auto", maxHeight: 380 }}>
-          <table className="t" style={{ minWidth: 700 }}>
+        <div className="t-scroll" style={{ overflowX: "auto" }}>
+          <table className="t" style={{ minWidth: 720 }}>
             <thead><tr>
-              <th>Empresa</th>
-              <th className="num">Slope %/mês</th>
-              <th className="num">IC 95%</th>
-              <th className="num">R²</th>
-              <th>Veredito</th>
+              <th>Setor</th>
+              <th className="num">Lojas</th>
+              <th className="num">Receita total</th>
+              <th className="num">Líquido total</th>
+              <th className="num">Margem</th>
+              <th className="num">Crescimento %/mês</th>
+              <th className="num">Volatilidade (CV)</th>
+              <th className="num">Meses</th>
             </tr></thead>
             <tbody>
-              {perLoja.slice(0, 24).map(p => {
-                const veredito = p.significant ? (p.slopePct > 0 ? "Cresce" : "Cai") : "Indistinguível de ruído";
-                const color = p.significant ? (p.slopePct > 0 ? "var(--green)" : "var(--red)") : "var(--fg-3)";
+              {SETORES_ORD.map(sec => {
+                const s = setorStats[sec];
+                if (!s || !s.hasData) return (
+                  <tr key={sec}><td><b>{sec}</b></td><td colSpan="7" className="num" style={{color:"var(--fg-3)"}}>Sem dados</td></tr>
+                );
+                const margemColor = s.margem >= 5 ? "var(--green)" : s.margem >= 0 ? "var(--cyan)" : "var(--red)";
+                const slopeColor = s.significant ? (s.slopePct >= 0 ? "var(--green)" : "var(--red)") : "var(--fg-3)";
                 return (
-                  <tr key={p.slug}>
-                    <td><b>{p.label}</b></td>
-                    <td className="num" style={{ color }}>{fmtPctSig(p.slopePct)}</td>
-                    <td className="num" style={{ fontSize: 11, color: "var(--fg-3)" }}>[{fmtPctSig(p.ciLo)} ; {fmtPctSig(p.ciHi)}]</td>
-                    <td className="num">{(p.r2*100).toFixed(0)}%</td>
-                    <td style={{ color, fontWeight: 600, fontSize: 12 }}>{veredito}</td>
+                  <tr key={sec}>
+                    <td><b style={{color:window.colorForSetor(sec)}}>● {sec}</b></td>
+                    <td className="num">{s.qtdLojas}</td>
+                    <td className="num">{fmtCompactNum(s.totalRec)}</td>
+                    <td className="num" style={{color: s.totalLiq >= 0 ? "var(--green)":"var(--red)"}}>{fmtCompactNum(s.totalLiq)}</td>
+                    <td className="num" style={{color:margemColor, fontWeight:700}}>{s.margem.toFixed(1).replace(".",",")}%</td>
+                    <td className="num" style={{color:slopeColor}}>{fmtPctSig(s.slopePct)} {!s.significant && <span style={{fontSize:10}}>(NS)</span>}</td>
+                    <td className="num">{(s.cv*100).toFixed(0)}%</td>
+                    <td className="num">{s.n}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-      </Secao>
+        <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 8 }}>NS = não significativo (IC 95% cruza zero — pode ser ruído).</div>
+      </TeseSecao>
 
-      {/* §05 — Correlação inter-empresas */}
-      {corrMatrix && (
-        <Secao numero={5}
-          titulo="O portfólio é mesmo diversificado?"
-          subtitulo="Matriz de correlação Pearson das receitas mensais. Verde = movem juntas. Vermelho = movem oposto. Diversificação real exige correlações baixas/negativas."
+      {/* §02 — Trajetória 12+ meses (índice 100) */}
+      <TeseSecao numero={2}
+        titulo="Trajetória: quem subiu, quem desceu desde {primeiro mês observado}"
+        subtitulo="Receita normalizada (índice 100 = primeiro mês de cada setor). Mostra quem cresceu, quem caiu, quem ficou estável."
+        insight={
+          <>
+            {(() => {
+              const setoresOk = SETORES_ORD.filter(s => setorStats[s] && setorStats[s].hasData);
+              const finais = setoresOk.map(s => {
+                const ss = setorStats[s];
+                return { sec: s, idx: (ss.rec[ss.rec.length-1] / Math.max(1, ss.rec[0])) * 100 };
+              }).sort((a,b) => b.idx - a.idx);
+              if (!finais.length) return "Sem dados.";
+              return <>Trajetórias finais (índice 100 = início): {finais.map(f => `${f.sec}: ${f.idx.toFixed(0)}`).join(" · ")}. {finais[0].idx > 130 ? `${finais[0].sec} cresceu mais de 30%, sinal de capacidade de absorção do mercado.` : ""} {finais[finais.length-1].idx < 70 ? `${finais[finais.length-1].sec} contraiu mais de 30% — situação grave que exige ação imediata.` : ""}</>;
+            })()}
+          </>
+        }
+        pergunta="Se um setor tá caindo, é tendência ou ruído? Vamos ver o intervalo de confiança da inclinação."
+      >
+        <TrajetoriaChart data={setorStats} />
+      </TeseSecao>
+
+      {/* §03 — IC do crescimento por setor */}
+      <TeseSecao numero={3}
+        titulo="Crescimento estatisticamente robusto"
+        subtitulo="Slope OLS com IC 95% — só significativo se IC não cruza zero. Verde-claro = robusto positivo. Vermelho = robusto negativo. Cinza = ruído."
+        insight={
+          <>
+            {(() => {
+              const sigPos = SETORES_ORD.filter(s => setorStats[s]?.significant && setorStats[s]?.slopePct > 0);
+              const sigNeg = SETORES_ORD.filter(s => setorStats[s]?.significant && setorStats[s]?.slopePct < 0);
+              const ns = SETORES_ORD.filter(s => setorStats[s]?.hasData && !setorStats[s]?.significant);
+              return <>{sigPos.length} setor{sigPos.length === 1 ? "" : "es"} com crescimento robusto: <b style={{color:"var(--green)"}}>{sigPos.join(", ") || "nenhum"}</b>. {sigNeg.length} com queda robusta: <b style={{color:"var(--red)"}}>{sigNeg.join(", ") || "nenhuma"}</b>. {ns.length} indistinguível de ruído. <b>Investimento novo deve priorizar setores com crescimento robusto positivo.</b></>;
+            })()}
+          </>
+        }
+        pergunta="OK, sabemos como cada setor caminha sozinho. Mas eles se movem juntos? Diversificação real?"
+      >
+        <div className="t-scroll" style={{ overflowX: "auto" }}>
+          <table className="t" style={{ minWidth: 600 }}>
+            <thead><tr>
+              <th>Setor</th>
+              <th className="num">Slope %/mês</th>
+              <th className="num">IC 95%</th>
+              <th className="num">R²</th>
+              <th>Veredito</th>
+            </tr></thead>
+            <tbody>
+              {SETORES_ORD.filter(s => setorStats[s]?.hasData).map(sec => {
+                const s = setorStats[sec];
+                const tipo = !s.significant ? { label: "Indistinguível de ruído", color: "var(--fg-3)" }
+                  : s.slopePct > 0 ? { label: "Crescimento robusto", color: "var(--green)" }
+                  : { label: "Queda robusta", color: "var(--red)" };
+                return (
+                  <tr key={sec}>
+                    <td><b style={{color:window.colorForSetor(sec)}}>● {sec}</b></td>
+                    <td className="num" style={{color:tipo.color, fontWeight:700}}>{fmtPctSig(s.slopePct)}</td>
+                    <td className="num" style={{fontSize:11, color:"var(--fg-3)"}}>[{fmtPctSig(s.ciLo)} ; {fmtPctSig(s.ciHi)}]</td>
+                    <td className="num">{(s.r2*100).toFixed(0)}%</td>
+                    <td style={{color:tipo.color, fontWeight:600, fontSize:12}}>{tipo.label}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </TeseSecao>
+
+      {/* §04 — Correlação entre setores */}
+      {corrInter && (
+        <TeseSecao numero={4}
+          titulo="Diversificação real: setores se hedgeam?"
+          subtitulo={`Matriz de correlação Pearson das receitas mensais entre setores (n=${corrInter.n} meses comuns). Verde = movem juntos. Vermelho = movem opostos.`}
           insight={
             <>
               {(() => {
-                const M = corrMatrix.matrix.length;
-                let sumOff = 0, n = 0, max = -1, maxPair = null;
-                for (let i = 0; i < M; i++) for (let j = i+1; j < M; j++) {
-                  sumOff += corrMatrix.matrix[i][j];
-                  n++;
-                  if (corrMatrix.matrix[i][j] > max) { max = corrMatrix.matrix[i][j]; maxPair = [corrMatrix.labels[i], corrMatrix.labels[j]]; }
+                let sumOff = 0, n = 0, max = -2, maxPair = null, min = 2, minPair = null;
+                for (let i = 0; i < corrInter.matrix.length; i++) for (let j = i+1; j < corrInter.matrix.length; j++) {
+                  const v = corrInter.matrix[i][j];
+                  sumOff += v; n++;
+                  if (v > max) { max = v; maxPair = [corrInter.setores[i], corrInter.setores[j]]; }
+                  if (v < min) { min = v; minPair = [corrInter.setores[i], corrInter.setores[j]]; }
                 }
-                const avgCorr = n > 0 ? sumOff / n : 0;
-                return <>Correlação média do portfólio: <b>{avgCorr.toFixed(2)}</b>. {avgCorr > 0.5 ? "Alta — quando uma cai, várias caem juntas. Diversificação aparente." : avgCorr > 0.2 ? "Moderada — algum hedge entre lojas." : "Baixa — boa diversificação real."} Par mais correlato: <b>{maxPair?.[0]}</b> × <b>{maxPair?.[1]}</b> (<b>{max.toFixed(2)}</b>) — provavelmente respondem ao mesmo driver.</>;
+                const avg = n > 0 ? sumOff/n : 0;
+                return <>Correlação média entre setores: <b>{avg.toFixed(2)}</b>. {avg < 0.3 ? "Diversificação real boa." : avg < 0.6 ? "Diversificação moderada." : "Setores se movem juntos — pouca diversificação real."} Par mais correlato: <b>{maxPair?.join(" × ")}</b> ({max.toFixed(2)}). Par com maior hedge: <b>{minPair?.join(" × ")}</b> ({min.toFixed(2)}).</>;
               })()}
             </>
           }
-          pergunta="E se eu tirar uma loja específica? Ela é amplificadora do grupo (β>1) ou é defensiva (β<1)?"
+          pergunta="E contra o macro? A operação se mexe junto com inflação, juros, atividade econômica?"
         >
-          <HeatmapCorr matrix={corrMatrix.matrix} labels={corrMatrix.labels} />
-        </Secao>
+          <CorrSet matrix={corrInter.matrix} labels={corrInter.setores} />
+        </TeseSecao>
       )}
 
-      {/* §06 — Beta */}
-      {betas && betas.length > 0 && (
-        <Secao numero={6}
-          titulo="Quem amplifica, quem amortece"
-          subtitulo="Beta = sensibilidade da receita da loja vs receita total do grupo (CAPM interno). β>1 amplifica · β<1 defende · β<0 hedge real."
-          insight={
-            <>
-              {(() => {
-                const amp = betas.filter(b => b.beta > 1.2).length;
-                const def = betas.filter(b => b.beta < 0.8 && b.beta > 0).length;
-                const hedge = betas.filter(b => b.beta < 0).length;
-                return <>{amp} lojas <b style={{color:"var(--amber)"}}>amplificam</b> (movimento do grupo × β); {def} lojas são <b style={{color:"var(--cyan)"}}>defensivas</b>; {hedge} lojas <b style={{color:"var(--green)"}}>hedge real</b> (movem opostas ao grupo). Defensivas e hedges valem prêmio em portfólio — diluem o risco sistemático.</>;
-              })()}
-            </>
-          }
-          pergunta="OK, internamente as lojas se hedgeam. Mas e contra a economia? Quanto a receita do grupo se mexe junto com IPCA, CDI, atividade econômica?"
-        >
-          <div className="t-scroll" style={{ overflowX: "auto", maxHeight: 320 }}>
-            <table className="t" style={{ minWidth: 580 }}>
-              <thead><tr>
-                <th>Empresa</th><th className="num">Beta</th><th className="num">R² do beta</th><th>Tipo</th>
-              </tr></thead>
+      {/* §05 — Macro */}
+      <TeseSecao numero={5}
+        titulo="Sensibilidade macro: como cada setor reage à economia"
+        subtitulo="Correlação da receita mensal de cada setor contra séries oficiais BCB: IPCA (inflação), CDI (juros), IBC-Br (atividade econômica)."
+        insight={
+          !macro ? "Buscando dados do BCB..." :
+          macroCorr ? (() => {
+            const linhas = [];
+            for (const sec of SETORES_ORD) {
+              if (!macroCorr[sec]) continue;
+              const corrs = Object.entries(macroCorr[sec]).filter(([_,v]) => Math.abs(v) > 0.5);
+              if (corrs.length) linhas.push(<div key={sec}><b style={{color:window.colorForSetor(sec)}}>{sec}</b>: {corrs.map(([k,v]) => `${k} ${v >= 0 ? "+" : ""}${v.toFixed(2)}`).join(" · ")}</div>);
+            }
+            return linhas.length ? <>{linhas}<div style={{marginTop:8, fontSize:13}}>Correlações fortes (|ρ| &gt; 0,5) sinalizam exposição macro. Setor sem correlação forte é "barco a vela próprio" — bom em períodos de macro hostil.</div></> : "Nenhum setor mostra correlação macro forte (|ρ| > 0,5). Operação é relativamente independente do ciclo econômico — bom em períodos de stress.";
+          })() : "Sem dados macro disponíveis."
+        }
+        pergunta="OK, sabemos performance histórica. Mas qual setor ainda absorve capital novo (em ramp-up) vs qual chegou no platô?"
+      >
+        {macroCorr && (
+          <div className="t-scroll" style={{ overflowX: "auto" }}>
+            <table className="t">
+              <thead><tr><th>Setor</th><th className="num">IPCA</th><th className="num">CDI</th><th className="num">IBC-Br</th></tr></thead>
               <tbody>
-                {betas.slice().sort((a,b) => b.beta - a.beta).map(p => {
-                  const tipo = p.beta > 1.2 ? { label: "Amplificadora", color: "var(--amber)" }
-                    : p.beta > 0.8 ? { label: "Neutra", color: "var(--cyan)" }
-                    : p.beta > 0 ? { label: "Defensiva", color: "var(--green)" }
-                    : { label: "Hedge real", color: "var(--green)" };
-                  return (
-                    <tr key={p.slug}>
-                      <td><b>{p.label}</b></td>
-                      <td className="num" style={{ color: tipo.color, fontWeight: 600 }}>{p.beta.toFixed(2)}</td>
-                      <td className="num">{(p.betaR2*100).toFixed(0)}%</td>
-                      <td style={{ color: tipo.color, fontWeight: 600, fontSize: 12 }}>{tipo.label}</td>
-                    </tr>
-                  );
-                })}
+                {SETORES_ORD.filter(s => macroCorr[s]).map(sec => (
+                  <tr key={sec}>
+                    <td><b style={{color:window.colorForSetor(sec)}}>● {sec}</b></td>
+                    <td className="num">{macroCorr[sec].IPCA?.toFixed(2) || "—"}</td>
+                    <td className="num">{macroCorr[sec].CDI?.toFixed(2) || "—"}</td>
+                    <td className="num">{macroCorr[sec]["IBC-Br"]?.toFixed(2) || "—"}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-          </div>
-        </Secao>
-      )}
-
-      {/* §07 — Macro */}
-      <Secao numero={7}
-        titulo="Você é um navio ou um barco?"
-        subtitulo="Correlação da receita do grupo com séries macroeconômicas oficiais (BCB) — IPCA, CDI, atividade econômica (IBC-Br)."
-        insight={
-          macroLoading ? "Buscando séries macro do BCB..." :
-          macro && macroCorr ? (() => {
-            const ipcaC = macroCorr["IPCA"], cdiC = macroCorr["CDI"], ibcC = macroCorr["IBC-Br"];
-            const correlatos = Object.entries(macroCorr).filter(([_,v]) => Math.abs(v) > 0.5);
-            return <>
-              {correlatos.length === 0
-                ? "Receita do grupo é praticamente independente das séries macro testadas. Você é um barco a vela próprio — bom em períodos de turbulência macro, ruim em períodos de vento favorável que não te leva junto."
-                : `Receita correlaciona com: ${correlatos.map(([k,v]) => `${k} (${v >= 0 ? "+" : ""}${v.toFixed(2)})`).join(", ")}. Em períodos de stress macro, espere efeito proporcional.`}
-              {ipcaC != null && <><br/>IPCA: {ipcaC.toFixed(2)}, CDI: {cdiC?.toFixed(2)}, IBC-Br (atividade): {ibcC?.toFixed(2)}.</>}
-            </>;
-          })() : "Sem acesso à API BCB no momento (offline ou bloqueio CORS). Tente recarregar."
-        }
-        pergunta="Beleza, sabemos correlação interna e externa. Mas onde investir o próximo R$? Nas que estão saturadas ou nas que estão acelerando?"
-      >
-        {macro && Object.keys(macro).length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 8 }}>
-            {Object.entries(macro).map(([name, series]) => (
-              <div key={name} className="card" style={{ padding: 12 }}>
-                <div style={{ fontSize: 11, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600 }}>{name}</div>
-                <div style={{ fontSize: 11, marginTop: 4, color: "var(--fg-2)" }}>
-                  {series.length} pontos · último: {series[series.length-1]?.data}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--cyan)", marginTop: 6 }}>
-                  {series[series.length-1]?.valor.toFixed(2)}
-                </div>
-                {macroCorr && macroCorr[name] != null && (
-                  <div style={{ fontSize: 11, marginTop: 6, color: Math.abs(macroCorr[name]) > 0.5 ? "var(--amber)" : "var(--fg-3)" }}>
-                    Corr c/ receita: <b>{macroCorr[name].toFixed(2)}</b>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         )}
-      </Secao>
+      </TeseSecao>
 
-      {/* §08 — Saturação */}
-      {saturacao && (
-        <Secao numero={8}
-          titulo="Quem está acelerando, quem está maduro, quem está decaindo"
-          subtitulo="Razão entre receita do último terço × primeiro terço dos meses ativos. >1.3 acelerando · 0.7-1.3 maduro · <0.7 decaindo."
-          insight={
-            <>
-              {(() => {
-                const ace = saturacao.filter(s => s.status === "acelerando");
-                const mad = saturacao.filter(s => s.status === "maduro");
-                const dec = saturacao.filter(s => s.status === "decaindo");
-                return <><b style={{color:"var(--green)"}}>{ace.length} acelerando</b> (capacidade de absorver mais capital antes do platô) · <b style={{color:"var(--cyan)"}}>{mad.length} maduras</b> (geram caixa estável, distribuir lucro) · <b style={{color:"var(--red)"}}>{dec.length} decaindo</b> (capital novo provavelmente desperdiçado, considerar fechamento).</>;
-              })()}
-            </>
-          }
-          pergunta="Sabendo quem absorve capital e quem não absorve, qual o portfólio ótimo?"
-        >
-          <div className="t-scroll" style={{ overflowX: "auto", maxHeight: 320 }}>
-            <table className="t" style={{ minWidth: 660 }}>
-              <thead><tr><th>Empresa</th><th className="num">Receita média</th><th className="num">Razão t3/t1</th><th>Status</th></tr></thead>
-              <tbody>
-                {saturacao.slice().sort((a,b) => b.ramp - a.ramp).map(s => {
-                  const colors = { acelerando: "var(--green)", maduro: "var(--cyan)", decaindo: "var(--red)", imaturo: "var(--fg-3)" };
-                  return (
-                    <tr key={s.slug}>
-                      <td><b>{s.label}</b></td>
-                      <td className="num">{fmtCompactNum(s.meanRec)}</td>
-                      <td className="num" style={{ color: colors[s.status] }}>{s.ramp.toFixed(2)}×</td>
-                      <td style={{ color: colors[s.status], fontWeight: 600, textTransform: "capitalize", fontSize: 12 }}>{s.status}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Secao>
-      )}
-
-      {/* §09 — Realocação */}
-      {realocacao && (
-        <Secao numero={9}
-          titulo="Realocação ótima por Sharpe"
-          subtitulo="Sharpe = retorno médio mensal / σ. Pesos ótimos proporcionais ao Sharpe (positivos). Compara com peso atual (% da receita)."
-          insight={
-            <>
-              {(() => {
-                const moveIn = realocacao.filter(r => r.delta > 5).slice(0, 3);
-                const moveOut = realocacao.filter(r => r.delta < -5).slice(-3).reverse();
-                if (moveIn.length === 0 && moveOut.length === 0) return "Carteira está perto da fronteira eficiente. Ajustes finos de < 5pp por loja.";
-                return <>
-                  Aumentar exposição em: <b>{moveIn.map(r => r.label).join(", ") || "—"}</b>.<br/>
-                  Reduzir exposição em: <b>{moveOut.map(r => r.label).join(", ") || "—"}</b>.<br/>
-                  Esses ajustes movem o portfólio em direção à fronteira eficiente sem mudar o tamanho total.
-                </>;
-              })()}
-            </>
-          }
-          pergunta="Tudo isso é olhar pro passado. E o futuro? Qual a probabilidade de fechar 2026 no positivo?"
-        >
-          <div className="t-scroll" style={{ overflowX: "auto", maxHeight: 360 }}>
-            <table className="t" style={{ minWidth: 660 }}>
-              <thead><tr>
-                <th>Empresa</th><th className="num">Sharpe</th><th className="num">Peso atual</th><th className="num">Peso ótimo</th><th className="num">Δ</th>
-              </tr></thead>
-              <tbody>
-                {realocacao.map(r => {
-                  const dColor = r.delta > 5 ? "var(--green)" : r.delta < -5 ? "var(--red)" : "var(--fg-3)";
-                  return (
-                    <tr key={r.slug}>
-                      <td><b>{r.label}</b></td>
-                      <td className="num">{r.sharpe.toFixed(2)}</td>
-                      <td className="num">{r.pesoAtual.toFixed(1)}%</td>
-                      <td className="num cyan">{r.pesoOtimo.toFixed(1)}%</td>
-                      <td className="num" style={{ color: dColor, fontWeight: 700 }}>{r.delta >= 0 ? "+" : ""}{r.delta.toFixed(1)}pp</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Secao>
-      )}
-
-      {/* §10 — Forecast Monte Carlo */}
-      {forecast && (
-        <Secao numero={10}
-          titulo="O futuro tem forma de distribuição"
-          subtitulo="Monte Carlo (1000 simulações) usando trend + sazonalidade + N(0,σ_ruído). Banda P5–P95."
-          insight={
-            <>
-              Receita anual projetada: <b>{fmtCompactNum(forecast.annualP50)}</b> (mediana). Intervalo de confiança 90%: [<b>{fmtCompactNum(forecast.annualP05)}</b> ; <b>{fmtCompactNum(forecast.annualP95)}</b>]. <br/>
-              Probabilidade de a receita anual ser positiva: <b style={{color: forecast.probPositivo > 80 ? "var(--green)" : "var(--amber)"}}>{forecast.probPositivo.toFixed(1)}%</b>. Quanto mais larga a banda, mais incerto — investidor sério desconta a incerteza.
-            </>
-          }
-          pergunta="E a conclusão executiva — em uma página, qual a tese?"
-        >
-          <LineWithBand
-            data={forecast.summary.map((s,i) => ({
-              label: `+${s.h}m`,
-              lo: s.p05, mid: s.p50, hi: s.p95,
-            }))}
-            height={220}
-            label="Receita mensal projetada · banda P5-P95"
-          />
-          <div className="kpi-row" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginTop: 16 }}>
-            <KpiTile tone="cyan"  label="P50 anual (mediana)" value={fmtCompactNum(forecast.annualP50)} hint="50% das simulações abaixo" />
-            <KpiTile tone="green" label="P95 anual (cenário bom)" value={fmtCompactNum(forecast.annualP95)} hint="só 5% acima" />
-            <KpiTile tone="red"   label="P05 anual (cenário ruim)" value={fmtCompactNum(forecast.annualP05)} hint="5% abaixo" />
-          </div>
-        </Secao>
-      )}
-
-      {/* §11 — Conclusão */}
-      <Secao numero={11}
-        titulo="Síntese do investidor"
-        subtitulo="Tese em uma página — o que faz dessa operação um bom (ou mau) negócio."
+      {/* §06 — Capacidade de absorção */}
+      <TeseSecao numero={6}
+        titulo="Capacidade de absorção: quem ainda tem espaço pra crescer"
+        subtitulo="Razão entre receita do último terço × primeiro terço dos meses. >1.3 = ainda em ramp · 0.7-1.3 = maduro · <0.7 = decaindo."
+        insight={
+          <>
+            {(() => {
+              const setoresAce = SETORES_ORD.filter(s => setorStats[s]?.hasData && setorStats[s]?.ramp > 1.3);
+              const setoresDec = SETORES_ORD.filter(s => setorStats[s]?.hasData && setorStats[s]?.ramp < 0.7);
+              const setoresMad = SETORES_ORD.filter(s => setorStats[s]?.hasData && setorStats[s]?.ramp >= 0.7 && setorStats[s]?.ramp <= 1.3);
+              return <>Setores em ramp-up (capital novo absorve bem): <b style={{color:"var(--green)"}}>{setoresAce.join(", ") || "nenhum"}</b>. Maduros (estáveis, ordenhar): <b style={{color:"var(--cyan)"}}>{setoresMad.join(", ") || "nenhum"}</b>. Decaindo (capital novo provavelmente desperdiçado): <b style={{color:"var(--red)"}}>{setoresDec.join(", ") || "nenhum"}</b>. <b>Capex de expansão deve ir para setores em ramp-up; capex de manutenção pra maduros; capex em setores decaindo só se houver tese clara de turnaround.</b></>;
+            })()}
+          </>
+        }
+        pergunta="Beleza, sabemos para onde vai o capital. E quanto vai ser a receita ano que vem?"
       >
-        <div style={{ background: "linear-gradient(135deg, rgba(34,211,238,0.10), rgba(34,211,238,0.02))", padding: 24, borderRadius: 12, border: "1px solid rgba(34,211,238,0.30)", lineHeight: 1.7, fontSize: 14 }}>
-          <p>
-            <b>{base.label}</b> é uma operação <b>{previsibilidade}</b> com receita média mensal de <b>{fmtCompactNum(meanRec)}</b> e tendência de <b>{fmtPctSig(slopePct)}/mês</b>.
-            {forecast && <> A projeção mediana fecha {REF_YEAR} com receita anual de <b>{fmtCompactNum(forecast.annualP50)}</b>, intervalo 90% de confiança entre <b>{fmtCompactNum(forecast.annualP05)}</b> e <b>{fmtCompactNum(forecast.annualP95)}</b>.</>}
-          </p>
-          <p>
-            <b>3 ações que destravam valor:</b>
-          </p>
-          <ol style={{ paddingLeft: 24, marginTop: 8 }}>
-            <li><b>Realocação dentro da carteira</b>: priorize as lojas com maior Sharpe e em ramp-up acelerado. Esse ajuste isolado normalmente vale 1-3 pontos percentuais de margem agregada.</li>
-            <li><b>Corte de cauda</b>: lojas com slope negativo significativo + Sharpe negativo são candidatas a fechamento ou venda. Cada R$ retirado delas é R$ liberado para criadoras.</li>
-            <li><b>Hedge externo</b>: com a correlação macro identificada, dimensione reserva de caixa proporcional à magnitude da exposição. Operação correlacionada com IBC-Br precisa de mais reserva em períodos de aperto monetário.</li>
-          </ol>
-          <p style={{ fontStyle: "italic", color: "var(--fg-2)", marginTop: 16, fontSize: 13 }}>
-            "Risco vem de não saber o que está fazendo. A análise estatística não elimina risco — torna-o mensurável e precificável." — adaptado de Buffett.
-          </p>
+        <div className="t-scroll" style={{ overflowX: "auto" }}>
+          <table className="t">
+            <thead><tr><th>Setor</th><th className="num">Razão t3/t1</th><th className="num">Receita média/mês</th><th className="num">Sharpe</th><th>Status</th></tr></thead>
+            <tbody>
+              {SETORES_ORD.filter(s => setorStats[s]?.hasData).map(sec => {
+                const s = setorStats[sec];
+                const status = s.ramp > 1.3 ? { l: "Em ramp-up", c: "var(--green)" }
+                  : s.ramp >= 0.7 ? { l: "Maduro", c: "var(--cyan)" }
+                  : { l: "Decaindo", c: "var(--red)" };
+                return (
+                  <tr key={sec}>
+                    <td><b style={{color:window.colorForSetor(sec)}}>● {sec}</b></td>
+                    <td className="num" style={{color:status.c, fontWeight:700}}>{s.ramp.toFixed(2)}×</td>
+                    <td className="num">{fmtCompactNum(s.meanR)}</td>
+                    <td className="num">{s.sharpe.toFixed(2)}</td>
+                    <td style={{color:status.c, fontWeight:600, fontSize:12}}>{status.l}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      </Secao>
+      </TeseSecao>
+
+      {/* §07 — Forecast por setor */}
+      <TeseSecao numero={7}
+        titulo="Projeção 12 meses por setor (Monte Carlo)"
+        subtitulo="500 simulações por setor usando trend + sazonalidade + ruído. Banda P5–P95 mostra intervalo de confiança 90%."
+        insight={
+          <>
+            {(() => {
+              const ssOk = SETORES_ORD.filter(s => forecastSetor[s] && setorStats[s]?.hasData);
+              const totP50 = ssOk.reduce((a,s) => a + (forecastSetor[s].p50 || 0), 0);
+              const totP05 = ssOk.reduce((a,s) => a + (forecastSetor[s].p05 || 0), 0);
+              const totP95 = ssOk.reduce((a,s) => a + (forecastSetor[s].p95 || 0), 0);
+              return <>Receita do grupo nos próximos 12 meses (mediana): <b>{fmtCompactNum(totP50)}</b>. Intervalo 90%: [<b>{fmtCompactNum(totP05)}</b> ; <b>{fmtCompactNum(totP95)}</b>]. Largura do intervalo é {((totP95-totP05)/Math.max(1,totP50)*100).toFixed(0)}% da mediana — incerteza {(totP95-totP05)/Math.max(1,totP50) > 0.4 ? "alta" : "moderada"}.</>;
+            })()}
+          </>
+        }
+        pergunta="Tudo isso converge em uma decisão única: lojas que valem ser fechadas/vendidas e lojas que merecem mais capital. A próxima seção é a resposta."
+      >
+        <div className="t-scroll" style={{ overflowX: "auto" }}>
+          <table className="t">
+            <thead><tr><th>Setor</th><th className="num">P5 (cenário ruim)</th><th className="num">P50 (mediana)</th><th className="num">P95 (cenário bom)</th></tr></thead>
+            <tbody>
+              {SETORES_ORD.filter(s => forecastSetor[s]).map(sec => {
+                const f = forecastSetor[sec];
+                return (
+                  <tr key={sec}>
+                    <td><b style={{color:window.colorForSetor(sec)}}>● {sec}</b></td>
+                    <td className="num red">{fmtCompactNum(f.p05)}</td>
+                    <td className="num cyan" style={{fontWeight:700}}>{fmtCompactNum(f.p50)}</td>
+                    <td className="num green">{fmtCompactNum(f.p95)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </TeseSecao>
+
+      {/* §08 — VEREDITO NOMINAL */}
+      <div className="card" style={{ marginBottom: 24, padding: 32, border: "2px solid var(--cyan)", background: "linear-gradient(135deg, rgba(34,211,238,0.06), transparent)" }}>
+        <div style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.3em", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>§08 · DECISÃO</div>
+        <h2 style={{ fontSize: 28, fontWeight: 800, margin: "8px 0 8px" }}>Vender ou investir: lista nominal</h2>
+        <p style={{ color: "var(--fg-2)", fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
+          Score combinando 4 critérios: significância do crescimento, margem, Sharpe (líquido/σ) e ramp t3/t1. Score &ge; 30 entra no ranking.
+        </p>
+
+        <div className="row" style={{ gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div>
+            <h3 style={{ color: "var(--red)", marginBottom: 12, fontSize: 16 }}>🔻 VENDER / FECHAR ({vereditos.vender.length})</h3>
+            {vereditos.vender.length === 0 ? (
+              <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Nenhuma loja se qualifica claramente para venda.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 12 }}>
+                {vereditos.vender.map((p,i) => {
+                  const motivos = [];
+                  if (p.significant && p.slopePct < 0) motivos.push(`queda significativa ${fmtPctSig(p.slopePct)}/mês`);
+                  if (p.margem < 0) motivos.push(`margem negativa ${p.margem.toFixed(1).replace(".",",")}%`);
+                  if (p.sharpe < 0) motivos.push(`Sharpe negativo ${p.sharpe.toFixed(2)}`);
+                  if (p.ramp < 0.7) motivos.push(`decaindo (t3/t1 ${p.ramp.toFixed(2)}×)`);
+                  if (p.cv > 0.5) motivos.push(`muito volátil (CV ${(p.cv*100).toFixed(0)}%)`);
+                  return (
+                    <div key={p.slug} style={{ padding: 12, background: "rgba(239,68,68,0.06)", borderLeft: "3px solid var(--red)", borderRadius: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                        <div><b>{i+1}. {p.label}</b><div style={{fontSize:10, color:"var(--fg-3)"}}>{p.setor}</div></div>
+                        <div style={{ fontSize: 13, color: "var(--red)", fontWeight: 700 }}>score {p.scoreVender.toFixed(0)}</div>
+                      </div>
+                      <ul style={{ marginTop: 6, marginLeft: 16, fontSize: 12, color: "var(--fg-2)" }}>
+                        {motivos.map((m,j) => <li key={j}>{m}</li>)}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 style={{ color: "var(--green)", marginBottom: 12, fontSize: 16 }}>🚀 INVESTIR / EXPANDIR ({vereditos.investir.length})</h3>
+            {vereditos.investir.length === 0 ? (
+              <div style={{ color: "var(--fg-3)", fontSize: 13 }}>Nenhuma loja se qualifica claramente para investimento.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 12 }}>
+                {vereditos.investir.map((p,i) => {
+                  const motivos = [];
+                  if (p.significant && p.slopePct > 0) motivos.push(`crescimento robusto ${fmtPctSig(p.slopePct)}/mês`);
+                  if (p.margem > 5) motivos.push(`margem de ${p.margem.toFixed(1).replace(".",",")}%`);
+                  if (p.sharpe > 0.3) motivos.push(`Sharpe ${p.sharpe.toFixed(2)} (qualidade do líquido)`);
+                  if (p.ramp > 1.3) motivos.push(`em ramp-up (t3/t1 ${p.ramp.toFixed(2)}×)`);
+                  return (
+                    <div key={p.slug} style={{ padding: 12, background: "rgba(16,185,129,0.06)", borderLeft: "3px solid var(--green)", borderRadius: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                        <div><b>{i+1}. {p.label}</b><div style={{fontSize:10, color:"var(--fg-3)"}}>{p.setor}</div></div>
+                        <div style={{ fontSize: 13, color: "var(--green)", fontWeight: 700 }}>score {p.scoreInvestir.toFixed(0)}</div>
+                      </div>
+                      <ul style={{ marginTop: 6, marginLeft: 16, fontSize: 12, color: "var(--fg-2)" }}>
+                        {motivos.map((m,j) => <li key={j}>{m}</li>)}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 24, padding: 16, background: "rgba(251,191,36,0.06)", borderLeft: "3px solid var(--amber)", borderRadius: 6, fontSize: 13, lineHeight: 1.6 }}>
+          <b style={{ color: "var(--amber)" }}>Tese final:</b> A oportunidade no Grupo DEX está em <b>concentrar capital no setor com crescimento robusto + ramp-up positivo</b> e <b>cortar a cauda do bottom 5</b>. Cada R$ retirado das lojas em queda é R$ liberado pra acelerar as estrelas. Sem dor, sem retorno superior.
+        </div>
+      </div>
 
       <div style={{ textAlign: "center", color: "var(--fg-3)", fontSize: 11, padding: "20px 0", marginTop: 16 }}>
-        Fontes: dados internos {REF_YEAR} (Omie API consolidada) · BCB API (séries 433 IPCA · 12 CDI · 24364 IBC-Br) · cálculos client-side (regressão OLS, Pearson, Monte Carlo bootstrap).
+        Análise baseada em <b>{grupoTotal.nMonths} meses</b> de dados Omie consolidados (mai/2025 → abr/2026), 4 setores agrupando {(CONTAS||[]).length} lojas. Macro via BCB API. Cálculos: regressão OLS, Pearson, Monte Carlo (500 sims/setor).
       </div>
     </div>
   );

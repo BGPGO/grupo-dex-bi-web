@@ -1025,6 +1025,20 @@ function inferCanal(label) {
   if (u.includes("SHOPPING")) return "Shopping";
   return "Rua";
 }
+function inferSetor(label) {
+  const u = (label||"").toUpperCase();
+  if (/DOMINOS|DOMINO|SPOLETO|BOALI/.test(u)) return "Food Delivery";
+  if (/(AEROPORTO|\bSDU\b|\bVIX\b)/.test(u) && !/DOMINOS|DOMINO|SHOPPING/.test(u)) return "Aeroporto Premium";
+  if (/OPTC[ÁA]LIA|OCULUM/.test(u)) return "Óptica";
+  return "Outros";
+}
+const _SETOR_COLORS = {
+  "Food Delivery": "#22d3ee",
+  "Aeroporto Premium": "#f59e0b",
+  "Óptica": "#a78bfa",
+  "Outros": "#6b7280",
+};
+const colorForSetor = (s) => _SETOR_COLORS[s] || "#6b7280";
 const _MARCA_COLORS = {
   "Domino's": "#22d3ee", "Optcália": "#a78bfa", "Oculum": "#f59e0b", "Boali": "#10b981",
   "Bolo de Rolo": "#ec4899", "Casa Bauducco": "#fbbf24", "Luigi": "#06b6d4",
@@ -1196,6 +1210,6 @@ Object.assign(window, {
   PAGE_TITLES, StatusFilterSeg, STATUS_FILTERS,
   DrilldownBadge, applyDrilldown, extratoMonthKey,
   // Helpers de portfolio
-  inferMarca, inferCanal, colorForMarca, fmtBRL0, fmtCompact,
+  inferMarca, inferCanal, inferSetor, colorForMarca, colorForSetor, fmtBRL0, fmtCompact,
   SparkLine, HhiCard, ParetoChart, buildLojasRows,
 });
