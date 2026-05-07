@@ -63,6 +63,179 @@ const _stats = {
   },
 };
 
+// ===== Spaghetti + fan chart Monte Carlo =====
+const SpaghettiFanChart = ({ forecast, color = "var(--cyan)", height = 280, compact = false }) => {
+  if (!forecast || !forecast.byMonth || !forecast.byMonth.length) return null;
+  const W = 760, ml = compact ? 36 : 56, mr = 12, mt = 12, mb = compact ? 22 : 30;
+  const cw = W - ml - mr, ch = height - mt - mb;
+  const trajs = forecast.trajs || [];
+  const months = forecast.byMonth;
+  const allVals = [
+    ...trajs.flatMap(t => t),
+    ...months.flatMap(m => [m.p05, m.p95]),
+  ].filter(v => v != null && Number.isFinite(v));
+  const minV = Math.min(0, ...allVals);
+  const maxV = Math.max(...allVals);
+  const range = (maxV - minV) || 1;
+  const x = (i) => ml + ((i+1) / 12) * cw;
+  const y = (v) => mt + ch - ((v - minV) / range) * ch;
+  // Anchor 0 = ponto atual (lastValue)
+  const x0 = ml;
+  const y0 = forecast.lastValue != null ? y(forecast.lastValue) : null;
+
+  const fmtTickLocal = (v) => {
+    const a = Math.abs(v);
+    if (a >= 1e6) return (v/1e6).toFixed(1).replace(".",",")+"M";
+    if (a >= 1e3) return (v/1e3).toFixed(0)+"k";
+    return Math.round(v).toString();
+  };
+
+  // Banda P5-P95 (mais larga)
+  const bandPath95 = months.map((m,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(m.p95).toFixed(1)}`).join(' ')
+    + ' ' + months.slice().reverse().map((m,i) => `L${x(months.length-1-i).toFixed(1)},${y(m.p05).toFixed(1)}`).join(' ') + ' Z';
+  // Banda P25-P75
+  const bandPath50 = months.map((m,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(m.p75).toFixed(1)}`).join(' ')
+    + ' ' + months.slice().reverse().map((m,i) => `L${x(months.length-1-i).toFixed(1)},${y(m.p25).toFixed(1)}`).join(' ') + ' Z';
+  // Mediana
+  const medPath = months.map((m,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(m.p50).toFixed(1)}`).join(' ');
+
+  // Anchors no ponto inicial
+  const wrapPath = (path) => y0 != null ? `M${x0},${y0} L${x(0)},${y(months[0].p50)}` : "";
+
+  return (
+    <div style={{ width: "100%", maxWidth: W, position: "relative" }}>
+      <svg viewBox={`0 0 ${W} ${height}`} style={{ display: "block", width: "100%", height: "auto" }}>
+        <defs>
+          <linearGradient id={`grad-${color.replace(/[^a-z]/gi,'')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.05} />
+          </linearGradient>
+        </defs>
+        {/* Grid */}
+        {[0, 0.25, 0.5, 0.75, 1].map(p => {
+          const v = minV + p * range;
+          const yy = y(v);
+          return (
+            <g key={p}>
+              <line x1={ml} y1={yy} x2={W-mr} y2={yy} stroke="var(--border)" strokeDasharray="3,3" />
+              {!compact && <text x={ml-5} y={yy+3} textAnchor="end" fontSize="10" fill="var(--fg-3)">{fmtTickLocal(v)}</text>}
+            </g>
+          );
+        })}
+        {/* Spaghetti — trajetórias finas */}
+        {trajs.map((t,i) => {
+          const path = (y0 != null ? `M${x0},${y0} ` : `M${x(0)},${y(t[0])} `)
+            + t.map((v,j) => `${j===0 && y0 == null ? '' : 'L'}${x(j).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+          return <path key={i} d={path} fill="none" stroke={color} strokeWidth={0.5} opacity={0.08} />;
+        })}
+        {/* Banda P5-P95 */}
+        <path d={bandPath95} fill={color} opacity={0.10} />
+        {/* Banda P25-P75 */}
+        <path d={bandPath50} fill={color} opacity={0.18} />
+        {/* Mediana */}
+        <path d={medPath} fill="none" stroke={color} strokeWidth={2.5} />
+        {/* Linha de conexão do passado */}
+        {y0 != null && (
+          <>
+            <line x1={x0} y1={y0} x2={x(0)} y2={y(months[0].p50)} stroke={color} strokeWidth={2.5} strokeDasharray="3,3" opacity={0.6} />
+            <circle cx={x0} cy={y0} r={4} fill={color} stroke="var(--bg)" strokeWidth={2} />
+            {!compact && <text x={x0} y={y0-8} fontSize="10" fill={color} fontWeight="700" textAnchor="start">hoje</text>}
+          </>
+        )}
+        {/* Pontos da mediana */}
+        {months.map((m,i) => (
+          <circle key={i} cx={x(i)} cy={y(m.p50)} r={2.5} fill={color} />
+        ))}
+        {/* Eixo x */}
+        {!compact && months.map((m,i) => i % 2 === 0 ? (
+          <text key={"l"+i} x={x(i)} y={height-8} textAnchor="middle" fontSize="10" fill="var(--fg-3)">+{m.h}m</text>
+        ) : null)}
+        {/* Marcador final P50 */}
+        {(() => {
+          const last = months[months.length-1];
+          return (
+            <g>
+              <circle cx={x(months.length-1)} cy={y(last.p50)} r={5} fill={color} stroke="var(--bg)" strokeWidth={2} />
+              {!compact && (
+                <>
+                  <text x={x(months.length-1)-8} y={y(last.p50)-10} fontSize="11" fontWeight="700" textAnchor="end" fill={color}>
+                    P50: {fmtTickLocal(last.p50)}
+                  </text>
+                  <text x={x(months.length-1)-8} y={y(last.p95)+12} fontSize="9" textAnchor="end" fill={color} opacity={0.7}>
+                    P95: {fmtTickLocal(last.p95)}
+                  </text>
+                  <text x={x(months.length-1)-8} y={y(last.p05)-2} fontSize="9" textAnchor="end" fill={color} opacity={0.7}>
+                    P5: {fmtTickLocal(last.p05)}
+                  </text>
+                </>
+              )}
+            </g>
+          );
+        })()}
+      </svg>
+      {!compact && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 18, fontSize: 11, color: "var(--fg-2)", marginTop: 4, flexWrap: "wrap" }}>
+          <span><span style={{ display: "inline-block", width: 14, height: 0.5, background: color, opacity: 0.3, verticalAlign: "middle", marginRight: 5, borderTop: "1px solid "+color }} />500 trajetórias</span>
+          <span><span style={{ display: "inline-block", width: 14, height: 8, background: color, opacity: 0.18, verticalAlign: "middle", marginRight: 5, borderRadius: 2 }} />Banda 50% (P25-P75)</span>
+          <span><span style={{ display: "inline-block", width: 14, height: 8, background: color, opacity: 0.10, verticalAlign: "middle", marginRight: 5, borderRadius: 2 }} />Banda 90% (P5-P95)</span>
+          <span><span style={{ display: "inline-block", width: 14, height: 2.5, background: color, verticalAlign: "middle", marginRight: 5 }} />Mediana</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ===== Histograma da distribuição anual =====
+const HistogramChart = ({ values, height = 200, color = "var(--cyan)" }) => {
+  if (!values || values.length === 0) return null;
+  const W = 360, ml = 40, mr = 12, mt = 12, mb = 30;
+  const cw = W - ml - mr, ch = height - mt - mb;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const N_BINS = 24;
+  const binW = (max - min) / N_BINS || 1;
+  const bins = Array(N_BINS).fill(0);
+  for (const v of values) {
+    const idx = Math.min(N_BINS - 1, Math.floor((v - min) / binW));
+    bins[idx]++;
+  }
+  const maxCount = Math.max(...bins);
+  const x = (i) => ml + (i / N_BINS) * cw;
+  const y = (c) => mt + ch - (c / Math.max(1, maxCount)) * ch;
+  const p50 = _stats.quantile(values, 0.5);
+  const p05 = _stats.quantile(values, 0.05);
+  const p95 = _stats.quantile(values, 0.95);
+  const xVal = (v) => ml + ((v - min) / Math.max(1, max - min)) * cw;
+  const fmtTickLocal = (v) => {
+    const a = Math.abs(v);
+    if (a >= 1e6) return (v/1e6).toFixed(1).replace(".",",")+"M";
+    if (a >= 1e3) return (v/1e3).toFixed(0)+"k";
+    return Math.round(v).toString();
+  };
+  return (
+    <svg viewBox={`0 0 ${W} ${height}`} style={{ display: "block", width: "100%", height: "auto" }}>
+      {/* Bins */}
+      {bins.map((c,i) => (
+        <rect key={i} x={x(i)+1} y={y(c)} width={cw/N_BINS - 1.5}
+          height={Math.max(0, mt+ch - y(c))} fill={color} opacity={0.7} rx={1} />
+      ))}
+      {/* P5 */}
+      <line x1={xVal(p05)} y1={mt} x2={xVal(p05)} y2={mt+ch} stroke="var(--red)" strokeWidth={1} strokeDasharray="3,2" />
+      <text x={xVal(p05)} y={mt-2} fontSize="9" fill="var(--red)" textAnchor="middle">P5</text>
+      {/* P50 */}
+      <line x1={xVal(p50)} y1={mt} x2={xVal(p50)} y2={mt+ch} stroke="var(--cyan)" strokeWidth={2} />
+      <text x={xVal(p50)} y={mt-2} fontSize="10" fill="var(--cyan)" textAnchor="middle" fontWeight="700">mediana</text>
+      {/* P95 */}
+      <line x1={xVal(p95)} y1={mt} x2={xVal(p95)} y2={mt+ch} stroke="var(--green)" strokeWidth={1} strokeDasharray="3,2" />
+      <text x={xVal(p95)} y={mt-2} fontSize="9" fill="var(--green)" textAnchor="middle">P95</text>
+      {/* Eixo x */}
+      <text x={ml} y={height-8} fontSize="10" fill="var(--fg-3)">{fmtTickLocal(min)}</text>
+      <text x={W-mr} y={height-8} fontSize="10" fill="var(--fg-3)" textAnchor="end">{fmtTickLocal(max)}</text>
+      <text x={W/2} y={height-8} fontSize="10" fill="var(--fg-3)" textAnchor="middle">receita anual projetada</text>
+    </svg>
+  );
+};
+
 // ===== Card de seção com narrativa =====
 const TeseSecao = ({ numero, titulo, subtitulo, children, insight, pergunta }) => (
   <div className="card" style={{ marginBottom: 24, padding: 28 }}>
@@ -87,7 +260,7 @@ const TeseSecao = ({ numero, titulo, subtitulo, children, insight, pergunta }) =
   </div>
 );
 
-const SETORES_ORD = ["Food Delivery", "Aeroporto Premium", "Óptica", "Outros"];
+const SETORES_ORD = ["Food Delivery", "Aeroporto Premium", "Óptica"];
 
 const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
   const REF_YEAR = window.REF_YEAR || new Date().getFullYear();
@@ -101,7 +274,6 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
   useEffect(() => {
     const series = [
       { id: 433, name: "IPCA" },
-      { id: 12, name: "CDI" },
       { id: 24364, name: "IBC-Br" },
     ];
     Promise.all(series.map(s =>
@@ -281,7 +453,7 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
     };
   }, [lojaStats]);
 
-  // ===== Forecast Monte Carlo por setor (12 meses) =====
+  // ===== Forecast Monte Carlo por setor (12 meses) — guarda TRAJETÓRIAS COMPLETAS =====
   const forecastSetor = useMemo(() => {
     const out = {};
     const N_SIMS = 500;
@@ -291,28 +463,92 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
       const last = s.n - 1;
       const trendLast = s.trendVals[last];
       const noiseStd = _stats.stdev(s.noise);
+      const slopeAbs = s.slopePct/100 * s.meanR;
+      const trajs = [];
       const annual = [];
       for (let k = 0; k < N_SIMS; k++) {
+        const traj = [];
         let total = 0;
         for (let h = 1; h <= 12; h++) {
-          const t = trendLast + (s.slopePct/100 * s.meanR) * h; // slope absoluto recuperado
+          const t = trendLast + slopeAbs * h;
           const lastM = parseInt(s.months[last].slice(5,7), 10);
           const futM = ((lastM - 1 + h) % 12);
           const seas = s.seasonal12[futM] || 0;
           const u1 = Math.random(), u2 = Math.random();
           const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-          total += Math.max(0, t + seas + z * noiseStd);
+          const v = Math.max(0, t + seas + z * noiseStd);
+          traj.push(v);
+          total += v;
         }
+        trajs.push(traj);
         annual.push(total);
+      }
+      // Resumo por mês (P5/P50/P95)
+      const byMonth = [];
+      for (let h = 0; h < 12; h++) {
+        const vals = trajs.map(t => t[h]);
+        byMonth.push({
+          h: h+1,
+          p05: _stats.quantile(vals, 0.05),
+          p25: _stats.quantile(vals, 0.25),
+          p50: _stats.quantile(vals, 0.50),
+          p75: _stats.quantile(vals, 0.75),
+          p95: _stats.quantile(vals, 0.95),
+        });
       }
       out[sec] = {
         p05: _stats.quantile(annual, 0.05),
+        p25: _stats.quantile(annual, 0.25),
         p50: _stats.quantile(annual, 0.50),
+        p75: _stats.quantile(annual, 0.75),
         p95: _stats.quantile(annual, 0.95),
+        annual, trajs: trajs.slice(0, 80), byMonth,  // só 80 trajs pra render
+        lastMonth: s.months[last],
+        lastValue: s.rec[last],
       };
     }
     return out;
   }, [setorStats]);
+
+  // Forecast consolidado do grupo (soma das trajetórias dos 3 setores)
+  const forecastGrupo = useMemo(() => {
+    const setoresOk = SETORES_ORD.filter(s => forecastSetor[s]);
+    if (setoresOk.length === 0) return null;
+    const N_SIMS = Math.min(...setoresOk.map(s => forecastSetor[s].annual.length));
+    const annual = [];
+    const trajs = [];
+    for (let k = 0; k < N_SIMS; k++) {
+      const sumTraj = Array(12).fill(0);
+      let sumAnnual = 0;
+      for (const sec of setoresOk) {
+        const fs = forecastSetor[sec];
+        for (let h = 0; h < 12; h++) sumTraj[h] += fs.trajs[k % fs.trajs.length]?.[h] || 0;
+        sumAnnual += fs.annual[k];
+      }
+      trajs.push(sumTraj);
+      annual.push(sumAnnual);
+    }
+    const byMonth = [];
+    for (let h = 0; h < 12; h++) {
+      const vals = trajs.map(t => t[h]);
+      byMonth.push({
+        h: h+1,
+        p05: _stats.quantile(vals, 0.05),
+        p25: _stats.quantile(vals, 0.25),
+        p50: _stats.quantile(vals, 0.50),
+        p75: _stats.quantile(vals, 0.75),
+        p95: _stats.quantile(vals, 0.95),
+      });
+    }
+    return {
+      p05: _stats.quantile(annual, 0.05),
+      p25: _stats.quantile(annual, 0.25),
+      p50: _stats.quantile(annual, 0.50),
+      p75: _stats.quantile(annual, 0.75),
+      p95: _stats.quantile(annual, 0.95),
+      annual, trajs: trajs.slice(0, 80), byMonth,
+    };
+  }, [forecastSetor]);
 
   // ===== Correlação entre setores =====
   const corrInter = useMemo(() => {
@@ -706,41 +942,77 @@ const PageTese = ({ statusFilter, drilldown, setDrilldown, year, month }) => {
         </div>
       </TeseSecao>
 
-      {/* §07 — Forecast por setor */}
+      {/* §07 — Forecast Monte Carlo flashy */}
       <TeseSecao numero={7}
-        titulo="Projeção 12 meses por setor (Monte Carlo)"
-        subtitulo="500 simulações por setor usando trend + sazonalidade + ruído. Banda P5–P95 mostra intervalo de confiança 90%."
+        titulo="Monte Carlo: 500 futuros possíveis"
+        subtitulo="Cada linha cinza é uma simulação completa do próximo ano (trend + sazonalidade + ruído). Ao centro, a mediana. Banda colorida = P25–P75 (50% mais prováveis). Banda extendida = P5–P95 (90%)."
         insight={
-          <>
-            {(() => {
-              const ssOk = SETORES_ORD.filter(s => forecastSetor[s] && setorStats[s]?.hasData);
-              const totP50 = ssOk.reduce((a,s) => a + (forecastSetor[s].p50 || 0), 0);
-              const totP05 = ssOk.reduce((a,s) => a + (forecastSetor[s].p05 || 0), 0);
-              const totP95 = ssOk.reduce((a,s) => a + (forecastSetor[s].p95 || 0), 0);
-              return <>Receita do grupo nos próximos 12 meses (mediana): <b>{fmtCompactNum(totP50)}</b>. Intervalo 90%: [<b>{fmtCompactNum(totP05)}</b> ; <b>{fmtCompactNum(totP95)}</b>]. Largura do intervalo é {((totP95-totP05)/Math.max(1,totP50)*100).toFixed(0)}% da mediana — incerteza {(totP95-totP05)/Math.max(1,totP50) > 0.4 ? "alta" : "moderada"}.</>;
-            })()}
-          </>
+          forecastGrupo ? (
+            <>
+              Receita do grupo nos próximos 12 meses (mediana): <b>{fmtCompactNum(forecastGrupo.p50)}</b>. Banda 50%: [<b>{fmtCompactNum(forecastGrupo.p25)}</b> ; <b>{fmtCompactNum(forecastGrupo.p75)}</b>]. Banda 90%: [<b>{fmtCompactNum(forecastGrupo.p05)}</b> ; <b>{fmtCompactNum(forecastGrupo.p95)}</b>]. A largura da banda é a sua incerteza honesta — quanto mais larga, menos confiança em qualquer ponto único.
+            </>
+          ) : "Sem simulação disponível."
         }
-        pergunta="Tudo isso converge em uma decisão única: lojas que valem ser fechadas/vendidas e lojas que merecem mais capital. A próxima seção é a resposta."
+        pergunta="Esses 500 futuros se sintetizam em decisões que importam: que lojas fechar, em quais investir. A próxima seção responde nominalmente."
       >
-        <div className="t-scroll" style={{ overflowX: "auto" }}>
-          <table className="t">
-            <thead><tr><th>Setor</th><th className="num">P5 (cenário ruim)</th><th className="num">P50 (mediana)</th><th className="num">P95 (cenário bom)</th></tr></thead>
-            <tbody>
-              {SETORES_ORD.filter(s => forecastSetor[s]).map(sec => {
-                const f = forecastSetor[sec];
-                return (
-                  <tr key={sec}>
-                    <td><b style={{color:window.colorForSetor(sec)}}>● {sec}</b></td>
-                    <td className="num red">{fmtCompactNum(f.p05)}</td>
-                    <td className="num cyan" style={{fontWeight:700}}>{fmtCompactNum(f.p50)}</td>
-                    <td className="num green">{fmtCompactNum(f.p95)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {forecastGrupo && (
+          <>
+            <h3 style={{ fontSize: 13, color: "var(--cyan)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginTop: 4, marginBottom: 8 }}>
+              GRUPO consolidado · receita mensal projetada
+            </h3>
+            <SpaghettiFanChart
+              forecast={forecastGrupo}
+              color="var(--cyan)"
+              height={280}
+            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 24 }}>
+              <div>
+                <h3 style={{ fontSize: 13, color: "var(--cyan)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 }}>
+                  Distribuição da receita anual projetada
+                </h3>
+                <HistogramChart values={forecastGrupo.annual} height={200} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 13, color: "var(--cyan)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 }}>
+                  Quantis da receita anual
+                </h3>
+                <div style={{ background: "var(--bg)", borderRadius: 8, padding: 16, border: "1px solid var(--border)" }}>
+                  {[
+                    { lbl: "Cenário pessimista (P5)", v: forecastGrupo.p05, c: "var(--red)" },
+                    { lbl: "Pessimista moderado (P25)", v: forecastGrupo.p25, c: "var(--amber)" },
+                    { lbl: "Mediana (P50)", v: forecastGrupo.p50, c: "var(--cyan)", bold: true },
+                    { lbl: "Otimista moderado (P75)", v: forecastGrupo.p75, c: "var(--green)" },
+                    { lbl: "Cenário otimista (P95)", v: forecastGrupo.p95, c: "var(--green)" },
+                  ].map((r,i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 4 ? "1px solid var(--border)" : "none" }}>
+                      <span style={{ color: "var(--fg-2)", fontSize: 13 }}>{r.lbl}</span>
+                      <span style={{ color: r.c, fontWeight: r.bold ? 800 : 600, fontSize: r.bold ? 16 : 13 }}>{fmtCompactNum(r.v)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <h3 style={{ fontSize: 13, color: "var(--fg-2)", textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, marginTop: 32, marginBottom: 12 }}>
+              Por setor — cada um com sua própria assinatura de risco
+            </h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+              {SETORES_ORD.filter(s => forecastSetor[s]).map(sec => (
+                <div key={sec} style={{ background: "var(--bg)", borderRadius: 8, padding: 12, border: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                    <b style={{ color: window.colorForSetor(sec), fontSize: 13 }}>● {sec}</b>
+                    <span style={{ fontSize: 11, color: "var(--fg-3)" }}>P50 anual: <b style={{ color: "var(--cyan)" }}>{fmtCompactNum(forecastSetor[sec].p50)}</b></span>
+                  </div>
+                  <SpaghettiFanChart
+                    forecast={forecastSetor[sec]}
+                    color={window.colorForSetor(sec)}
+                    height={150}
+                    compact
+                  />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </TeseSecao>
 
       {/* §08 — VEREDITO NOMINAL */}
